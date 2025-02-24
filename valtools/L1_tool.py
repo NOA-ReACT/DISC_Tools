@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 
 from valtool_manager import plot_EC_L1_comparison
 from valio import build_paths
+from valconfig import DEFAULT_CONFIG_L1
 
 
 
@@ -54,14 +55,15 @@ def main():
                                         profile plots, default: False
     """
     # Input paths
-    root_dir = "/home/akaripis/earthcare/files/20241212"
-    PATHS = build_paths(root_dir, 'L1')
+    # root_dir = "/home/akaripis/earthcare/files/20241212"
+    root_dir = DEFAULT_CONFIG_L1['ROOT_DIR']
+    PATHS = build_paths(root_dir, DEFAULT_CONFIG_L1['NETWORK'],'L1')
     
     try:
         fig = plot_EC_L1_comparison(anompath=PATHS['ANOM'], simpath=PATHS['SIM'],
-                                   sccfolderpath=PATHS['SCC'], pollyforlderpath=PATHS['POLLY'],
-                                   dstdir=PATHS['OUTPUT'],network='EARLINET',lin_scale=False, 
-                                   log_scale=True)
+                                   gndfolderpath=PATHS['GND'], dstdir=PATHS['OUTPUT'],
+                                   network = DEFAULT_CONFIG_L1['NETWORK'], 
+                                   fig_scale =DEFAULT_CONFIG_L1['FIG_SCALE'])
 
         plt.show()
     except Exception as e:

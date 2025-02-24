@@ -14,42 +14,12 @@ from matplotlib.gridspec import GridSpec
 import cartopy.crs as ccrs
 
 from ectools_noa import ecio, ecplot as ecplt, colormaps as clm
+from valconfig import DEFAULT_CONFIG_L1, DEFAULT_CONFIG_L2
 from valio import*
 from valplot import*
 
-
-DEFAULT_CONFIG_L1 = {
-    'MAX_DISTANCE': 50,
-    'HMAX': 16e3,
-    'FIGSIZE': (27, 15),
-    'DEFAULT_XLIMS': [(-1, 10), (-0.5, 10), (-0.5, 10)],
-    'DEFAULT_XLIMS_LOG': [(1e-2, 1e1), (1e-1, 1e1), (1e-3, 1e0)]
-}
-
-DEFAULT_CONFIG_L2 = {
-    'MAX_DISTANCE': 100,
-    'HMAX': 16e3,
-    'FIG_SCALE': 'log',
-    'NETWORK': 'POLLYXT',
-    'FIGSIZE': (35, 20),
-    'VARIABLES': [
-        'particle_backscatter_coefficient_355nm',
-        'particle_extinction_coefficient_355nm',
-        'lidar_ratio_355nm',
-        'particle_linear_depol_ratio_355nm'
-    ],
-    'DEFAULT_XLIMS': [(-1, 10.), (0, 220), (0, 200), (0, 1)],
-    'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
-    'PLOT_RANGES': {
-        'RCS': [0, 15e8],
-        'DEPOL': [0, 0.2]
-    }
-}
-
-
-def plot_EC_L1_comparison(anompath, simpath, sccfolderpath, pollyforlderpath, dstdir,
-                          network, lin_scale=True, log_scale=False, 
-                          max_distance=DEFAULT_CONFIG_L1['MAX_DISTANCE'],
+def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network, 
+                          fig_scale, max_distance=DEFAULT_CONFIG_L1['MAX_DISTANCE'],
                           hmax=DEFAULT_CONFIG_L1['HMAX'], figsize=DEFAULT_CONFIG_L1['FIGSIZE']):
     
     """
@@ -61,9 +31,8 @@ def plot_EC_L1_comparison(anompath, simpath, sccfolderpath, pollyforlderpath, ds
     ----------
     anompath : str                  |Path to the ANOM data file from EarthCARE
     simpath : str                   |Path to the simulator data file
-    sccfolderpath : str             |Path to the folder containing ground station 
-                                    (SCC) data
-    pollyfolderpath: str            | Path to folder containing POLLYXT files
+    gndfolderpath : str             |Path to the folder containing ground station 
+                                     data
     distdir : str                  |Directory where output figures will be saved
     network: str                   | Gnd data network's data that are processed
     max_distance : float, optional |Maximum distance in kilometers to consider for 
@@ -91,10 +60,19 @@ def plot_EC_L1_comparison(anompath, simpath, sccfolderpath, pollyforlderpath, ds
     
     The figure is automatically saved if distdir is provided.
     """
+    if fig_scale == 'linear':
+        lin_scale = True
+        log_scale = False
+    elif fig_scale == 'log':
+        lin_scale = False
+        log_scale = True     
+    else:
+        lin_scale = True
+        log_scale = True     
+        
     # Load GND data
     gnd_quicklook, station_name, station_coordinates = load_ground_data(network,
-                                                                        pollyforlderpath, 
-                                                                        sccfolderpath, 'L1')
+                                                                        gndfolderpath,'L1')
 
     # Load simulator data - no preproccessing needed
     SIM = ecio.load_ANOM(simpath)
@@ -203,11 +181,7 @@ def plot_EC_L1_comparison(anompath, simpath, sccfolderpath, pollyforlderpath, ds
     xlims_log = DEFAULT_CONFIG_L1['DEFAULT_XLIMS_LOG'] if log_scale else None
     
     # Define the variables that will be plotted. Must be 3. 
-    variables = [
-        'mie_attenuated_backscatter',
-        'rayleigh_attenuated_backscatter',
-        'crosspolar_attenuated_backscatter'
-    ]
+    variables = DEFAULT_CONFIG_L1['VARIABLES']
     
     # Plot variable profiles
     plot_profile_comparison(anom_50km, SIM, variables, [ax6, ax7, ax8], 
@@ -258,7 +232,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                       aebd, aebd_50km, shortest_time, baseline,
                       distance_idx_nearest, dst_min, s_dist_idx, aebd_100km, atc,
                       atc_100km, gnd_profiles, dstdir, hmax,
-                      fig_scale , network, keyword='Raman', figsize=(35, 20)):
+                      fig_scale , network, keyword=None, figsize=(35, 20)):
     """
     Creates L2 comparison plots between EarthCARE and ground data.
     
@@ -310,9 +284,13 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                  1.2], height_ratios=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], hspace=1.8,
                  wspace=0.6, top=0.85)
     
+    if keyword:
+        keyphrase = f'- {keyword} Retrieval' 
+    else: 
+        keyphrase = ' '
     # Add main title
     fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with\n'
-                 f' {station_name} Ground Station  L2 {network} - {keyword} Retrieval \n'
+                 f' {station_name} Ground Station  L2 {network} network {keyphrase} \n'
                  f'{overpass_time} UTC',
                  fontsize=26, weight='bold', va='top', y=.96)
 
@@ -340,8 +318,9 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                          dstdir=None, axes=[ax1, ax2, ax3, ax4, ax5],
                          comparison=True, station=shortest_time)
     
-    ecplt.quicklook_ATC(atc_100km,  hmax=1.5*hmax if hmax < 30e3 else 30e3, resolution=resolution, dstdir=None,
-                        axes=ax5, comparison=True, station=shortest_time)
+    ecplt.quicklook_ATC(atc_100km,  hmax=1.5*hmax if hmax < 30e3 else 30e3, 
+                        resolution=resolution, dstdir=None, axes=ax5, 
+                        comparison=True, station=shortest_time)
     
     # Create and adjust SCC axes
     ax6 = fig.add_subplot(gs[0:4, 3:5])
@@ -368,6 +347,12 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
         plot_range = [[0, 15e-6], [0, 0.4]]
         heightvar = 'height'
         units = ['m⁻¹ sr⁻¹','-']
+    elif network == 'LICHT':
+        variables_q = ['particle_backscatter_coefficient_355nm', 'particle_linear_depol_ratio_355nm']
+        titles_q = [f'{station_name}  part. bsc coeff. 532 nm', f'{station_name} vol.depol.ratio 532 nm']
+        plot_range = [[1e-7, 5e-5], [0.005, 0.8]]
+        heightvar = 'height'
+        units = ['m⁻¹ sr⁻¹','-']
     else:
         # Default case or error handling
         raise ValueError(f"Unsupported network: {network}. Must be either 'EARLINET' or 'POLLYXT'")
@@ -376,7 +361,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     
     for i, (ax, variable, title, p_range, unit) in enumerate(zip(axs, variables_q, titles_q, plot_range, units)):
         ecplt.plot_gnd_2D(ax, gnd_quicklooks, variable, ' ', heightvar=heightvar,
-                          cmap=clm.chiljet2, plot_scale='linear',
+                          cmap=clm.chiljet2, plot_scale='log',
                           plot_range=p_range, units=unit,  hmax=hmax if hmax < 22e3 else 22e3,
                           plot_position='bottom',
                           title=title, comparison=True,
@@ -422,7 +407,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     for i, (variable, ax) in enumerate(zip(variables, axes)):
         if variable in gnd_profiles:
             plot_AEBD_profiles(gnd_profiles, variable, ax=ax, lin_scale=lin_scale,
-                             log_scale=log_scale, profile='GND',
+                             hmax=hmax,log_scale=log_scale, profile='GND',
                              yticks=(i == 0))  # Only True for first axis
             
     for i, (variable, ax, title) in enumerate(zip(variables, axes, titles)):
@@ -459,11 +444,10 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     
     return fig
 
-def plot_EC_L2_comparison(aebdpath, atcpath, sccfolderpath, pollypath, dstdir,
-                         resolution, fig_scale, network,
-                         max_distance=DEFAULT_CONFIG_L2['MAX_DISTANCE'],
-                         hmax=DEFAULT_CONFIG_L2['HMAX'], raman=True, klett=True,
-                         figsize=DEFAULT_CONFIG_L2['FIGSIZE']):
+def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution, 
+                          fig_scale, network, max_distance=DEFAULT_CONFIG_L2['MAX_DISTANCE'],
+                          hmax=DEFAULT_CONFIG_L2['HMAX'], raman=True, klett=True,
+                          figsize=DEFAULT_CONFIG_L2['FIGSIZE']):
     """
     Create comparison plots between EarthCARE L2 and ground-based data.
     
@@ -485,10 +469,12 @@ def plot_EC_L2_comparison(aebdpath, atcpath, sccfolderpath, pollypath, dstdir,
     -------
     fig: matplotlib.figure   | The generated comparison plot figure
     """
-    # Plot GND data
-    gnd_quicklook, gnd_profile, station_name, station_coordinates = load_ground_data(network,
-                                                                                     pollypath, 
-                                                                                     sccfolderpath, 'L2')
+    #pdb.set_trace()
+    # Load and process GND data
+    gnd_quicklook, gnd_profile, station_name, \
+        station_coordinates = load_ground_data(network, gndfolderpath, 'L2',
+                                                smoothing= DEFAULT_CONFIG_L2['SMOOTHING'])
+
     #Load and process EarthCARE products
     # Load and crop AEBD  and  ATC product
     aebd, aebd_50km, shortest_time, aebd_baseline, distance_idx_nearest, \
@@ -506,26 +492,36 @@ def plot_EC_L2_comparison(aebdpath, atcpath, sccfolderpath, pollypath, dstdir,
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     overpass_date = '2023-09-09 03:10:20' #mock value for dummy  files.
     
-    if network == 'POLLYXT':
-        # Crop POLLY quicklook data around the overpass time
-        gnd_quicklook = crop_polly_file(gnd_quicklook ,overpass_date)
+    if network == 'POLLY':
+            gnd_quicklook = crop_polly_file(gnd_quicklook ,overpass_date)
 
-    for idx in range(s_dist_idx-2, s_dist_idx+2):
+
+    for idx in range(s_dist_idx-2, s_dist_idx+3):
         for time_idx in range(gnd_profile.dims['time']):    
-            polly_raman, polly_klett = read_pollynet_profile(
-                  gnd_profile.isel(time=time_idx), data=True)
-            gnd_datasets = []
-            keywords = []  
-            if raman: 
-                    gnd_datasets.append(polly_raman)
-                    keywords.append('Raman')
-            if klett:
-                    gnd_datasets.append(polly_klett)   
-                    keywords.append('Klett')
-                    
-            for i, (gnd_data, keyword) in enumerate(zip(gnd_datasets, keywords)):
-                    
+            
+            if network == 'LICHT':
+                gnd_data = gnd_profile.isel(time=time_idx)
                 plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
+                           station_coordinates, aebd, aebd_50km,
+                           shortest_time, baseline, distance_idx_nearest,
+                           dst_min, s_dist_idx, aebd_100km, atc, atc_100km,
+                           gnd_data, dstdir, hmax, fig_scale, 
+                           network, figsize=figsize)
+            else:      
+                polly_raman, polly_klett = read_pollynet_profile(gnd_profile.isel(time=time_idx), 
+                                                                     data=True)
+                gnd_datasets = []
+                keywords = []  
+                if raman: 
+                        gnd_datasets.append(polly_raman)
+                        keywords.append('Raman')
+                if klett:
+                        gnd_datasets.append(polly_klett)   
+                        keywords.append('Klett')
+                    
+                for i, (gnd_data, keyword) in enumerate(zip(gnd_datasets, keywords)):
+                    
+                    plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
                            station_coordinates, aebd, aebd_50km,
                            shortest_time, baseline, distance_idx_nearest,
                            dst_min, s_dist_idx, aebd_100km, atc, atc_100km,

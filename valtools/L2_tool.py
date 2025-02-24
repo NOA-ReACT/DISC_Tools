@@ -25,8 +25,9 @@ import sys
 sys.path.append('/home/akaripis/earthcare')
 import matplotlib.pyplot as plt
 
-from valtool_manager import plot_EC_L2_comparison, DEFAULT_CONFIG_L2
+from valtool_manager import plot_EC_L2_comparison
 from valio import build_paths
+from valconfig import DEFAULT_CONFIG_L2
 
 
 
@@ -50,15 +51,16 @@ def main():
                                     plots, default: False
     scale: str                  | Scale of the profiles: linear or log
     """
+    
     # Input paths
-
-    root_dir = "/home/akaripis/earthcare/files/20241212"
-    PATHS = build_paths(root_dir, 'L2')
+    # ROOT_DIR= "/home/akaripis/earthcare/files/20241212"
+    ROOT_DIR = DEFAULT_CONFIG_L2['ROOT_DIR']
+    PATHS = build_paths(ROOT_DIR,DEFAULT_CONFIG_L2['NETWORK'], 'L2')
     
     try:
         fig = plot_EC_L2_comparison(aebdpath=PATHS['AEBD'], atcpath=PATHS['ATC'],
-                                  sccfolderpath=PATHS['SCC'], pollypath=PATHS['POLLY'],
-                                  dstdir=PATHS['OUTPUT'], resolution='high',
+                                  gndfolderpath=PATHS['GND'], dstdir=PATHS['OUTPUT'], 
+                                  resolution=DEFAULT_CONFIG_L2['RESOLUTION'],
                                   network = DEFAULT_CONFIG_L2['NETWORK'], 
                                   fig_scale =DEFAULT_CONFIG_L2['FIG_SCALE'])
         plt.show()

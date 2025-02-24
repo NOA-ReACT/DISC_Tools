@@ -3,7 +3,8 @@
 """
 Data processing module for EarthCARE analysis tools.
 """
-
+import sys
+sys.path.append('/home/akaripis/earthcare')
 import os
 import glob
 from datetime import datetime
@@ -11,7 +12,10 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import geopy.distance
+from scipy.ndimage import gaussian_filter1d
 from ectools_noa import ecio
+from local_reader import read_RV_meteor 
+import pdb
 
 def extract_date(filename, keyword, file_type):
     parts = filename.split('_')
@@ -37,7 +41,11 @@ def extract_date(filename, keyword, file_type):
             
     return datetime.max
 
-def build_paths(root_dir, level):
+def apply_gaussian_smoothing(da, sigma=2):
+    smoothed_data = gaussian_filter1d(da, sigma=sigma, axis=0)
+    return xr.DataArray(smoothed_data, coords=da.coords, dims=da.dims)
+
+def build_paths(root_dir, network, level):
     """
     Build paths dictionary from root directory
     
@@ -56,6 +64,13 @@ def build_paths(root_dir, level):
     if not os.path.exists(root_dir):
         raise ValueError(f"Root directory does not exist: {root_dir}")
 
+    if network == 'EARLINET':
+        gnd_suffix ='scc'
+    elif network == 'POLLYXT':
+        gnd_suffix = 'tropos'
+    elif network == 'LICHT':
+        gnd_suffix = 'licht'
+    
     if level =='L1':
         paths = {
             'ANOM': glob.glob(os.path.join(root_dir, level, 'eca', '*ATL_NOM*.h5')),
@@ -71,8 +86,7 @@ def build_paths(root_dir, level):
         paths = {
             'AEBD': glob.glob(os.path.join(root_dir, level, 'eca', '*ATL_EBD*.h5')),
             'ATC': glob.glob(os.path.join(root_dir, level, 'eca', '*ATL_TC__*.h5')),
-            'SCC': os.path.join(root_dir, level, 'gnd', 'scc'),
-            'POLLY': os.path.join(root_dir, level, 'gnd', 'tropos'),
+            'GND': os.path.join(root_dir, level, 'gnd',gnd_suffix),
             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
             }
     
@@ -85,15 +99,17 @@ def build_paths(root_dir, level):
     
     return paths
 
-def load_ground_data(network, pollypath, sccpath, data_type='L1'):
+def load_ground_data(network, data_path, data_type='L1', smoothing= None, 
+                     overpass_time=None):
     """
     Load ground-based lidar data based on network type and data requirements.
     
     Parameters:
     -----------
     network : str        | Network type ('EARLINET' or 'POLLYXT')
-    path : str           | Path to data files
+    dta_path : str       | Path to ground data files
     data_type : str      | Type of data processing required ('L1' or 'L2')
+    smoothing: bool      |Apply a low pass filter to remove high frequency noise
     
     Returns:
     --------
@@ -103,29 +119,38 @@ def load_ground_data(network, pollypath, sccpath, data_type='L1'):
     if network == 'EARLINET':
         if data_type == 'L1':
             # L1 processing
-            gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(sccpath)
+            gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(data_path)
         else:
             # L2 processing
-            gnd_profile_a = process_multiple_files(sccpath, 'EARLINET', 'b0355')
-            gnd_profile_b = process_multiple_files(sccpath, 'EARLINET', 'e0355')
+            gnd_profile_a = process_multiple_files(data_path, 'EARLINET', 'b0355')
+            gnd_profile_b = process_multiple_files(data_path, 'EARLINET', 'e0355')
             gnd_profile = xr.merge([gnd_profile_a, gnd_profile_b])
-            gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(sccpath)
+            gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(data_path)
+            if smoothing:
+                gnd_profile = gnd_profile.map(apply_gaussian_smoothing)
 
     elif network == 'POLLYXT':
         if data_type == 'L1':
             # L1 processing
-            gnd_quicklook_a = process_multiple_files(pollypath, 'POLLYXT', 'att_bsc')
-            gnd_quicklook_b = process_multiple_files(pollypath, 'POLLYXT', 'vol_depol')
+            gnd_quicklook_a = process_multiple_files(data_path, 'POLLYXT', 'att_bsc')
+            gnd_quicklook_b = process_multiple_files(data_path, 'POLLYXT', 'vol_depol')
             gnd_quicklook = xr.merge([gnd_quicklook_a, gnd_quicklook_b])
         else:
             # L2 processing
-            gnd_quicklook = process_multiple_files(pollypath, 'POLLYXT', 'quasi_results_V2')
+            gnd_quicklook = process_multiple_files(data_path, 'POLLYXT', 'quasi_results_V2')
             # The following line needed for the quasi files to be plotted correctly
             # else they are squeezed between 0-3km 
             gnd_quicklook = gnd_quicklook.assign_coords(height=gnd_quicklook.height * 10)
-            gnd_profile = process_multiple_files(pollypath, 'POLLYXT', 'profile')
+            gnd_profile = process_multiple_files(data_path, 'POLLYXT', 'profile')
+            if smoothing:
+                gnd_profile = gnd_profile.map(apply_gaussian_smoothing)
             
         station_name, station_coordinates = get_polly_station_info(gnd_quicklook, data=True)
+
+    elif network == 'LICHT':
+        gnd_quicklook, gnd_profile, station_coordinates, station_name = read_RV_meteor(data_path, 
+                                                 time_window=60)
+        
               
     else:
         raise ValueError(f"Unsupported network: {network}. Must be either 'EARLINET' or 'POLLYXT'")
@@ -319,10 +344,12 @@ def get_nearby_points_within_distance(latitudes, longitudes, reference_coords,
         return distance_idx_nearest, None
         
     nearest_distances = distance_array[distance_idx_nearest]
+    # All the following parameters refer to the cropped indices since the mask in 
+    # line 317 is applied
     shortest_distance = np.min(nearest_distances)
     shortest_distance_idx = np.where(nearest_distances == shortest_distance)
     longest_distance = np.max(nearest_distances)
-    
+
     return (distance_idx_nearest, shortest_distance, longest_distance, 
             shortest_distance_idx[0][0])
 
@@ -413,13 +440,14 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     shortest_time = time[s_dist_idx].values
     
     if second_trim:
-        distance_idx_nearest, s_dist, l_dist, s_dist_idx = get_nearby_points_within_distance(
+        # _2 to each name since they refer to the second trim product.
+        distance_idx_nearest_2, s_dist_2, l_dist_2, s_dist_idx_2 = get_nearby_points_within_distance(
             data['latitude'],
             data['longitude'],
             station_coordinates,
             max_distance_km=second_distance
         )
-        second_cropped_data = data.isel(along_track=distance_idx_nearest[0])
+        second_cropped_data = data.isel(along_track=distance_idx_nearest_2[0])
         return (data, cropped_data, shortest_time, baseline,
                 distance_idx_nearest, s_dist, s_dist_idx, second_cropped_data)
                 
@@ -437,7 +465,7 @@ def read_pollynet_profile(file, data=False):
         
     Returns
     -------
-    tuplε (ds_raman, ds_klett)       | Two datasets with aligned variable names
+    tuple (ds_raman, ds_klett)       | Two datasets with aligned variable names
     """
     ds_orig = file if data else xr.open_dataset(file)
     
@@ -498,3 +526,93 @@ def read_pollynet_profile(file, data=False):
     
     return ds_raman, ds_klett
 
+def cut_gnd_noise(sat_ds, gnd_ds, variables, heightvar_EC='height', 
+                  heightvar_gnd='height', step=50, threshold=200):
+    """
+    Function to cut noisy ground data. For a range of every 50km checks the average 
+    between the datasets and if their difference is above a threshold, it fills with nan 
+    values the respective points.
+    
+    Parameters
+    ----------
+    sat_ds : xarray.Dataset
+        Satellite dataset containing the reference measurements
+    gnd_ds : xarray.Dataset
+        Ground dataset to be filtered
+    variables : str or list of str
+        Variable name(s) to process
+    heightvar_EC : str, optional
+        Name of height coordinate in satellite (EC) dataset. Default is 'height'
+    heightvar_gnd : str, optional
+        Name of height coordinate in ground dataset. Default is 'height'
+    step : int, optional
+        Step size in kilometers for comparison windows. Default is 50.
+    threshold : float, optional
+        Maximum allowed percentage difference between averages. Default is 200.
+        
+    Returns
+    -------
+    xarray.Dataset
+        Filtered ground dataset with noise replaced by NaN values
+    """
+    import numpy as np
+    import xarray as xr
+    
+    # Convert single variable to list
+    if isinstance(variables, str):
+        variables = [variables]
+    
+    # Create a copy of ground dataset to avoid modifying the original
+    filtered_gnd = gnd_ds.copy(deep=True)
+    
+    # Verify variables exist in both datasets
+    for var in variables:
+        if var not in sat_ds or var not in gnd_ds:
+            raise ValueError(f"Variable {var} not found in both datasets")
+    
+    # Get the height coordinates
+    heights_gnd = gnd_ds[heightvar_gnd].values
+    heights_EC = sat_ds[heightvar_EC].values
+    
+    # Calculate the window ranges using the overlapping height range
+    min_height = max(heights_gnd.min(), heights_EC.min())
+    max_height = min(heights_gnd.max(), heights_EC.max())
+    height_ranges = np.arange(min_height, max_height + step, step)
+    
+    # Process each specified variable
+    for var in variables:
+        # Iterate through each height range
+        for start_height in height_ranges[:-1]:
+            end_height = start_height + step
+            
+            try:
+                # Select data within the current height range
+                sat_mask = (sat_ds[heightvar_EC] >= start_height) & (sat_ds[heightvar_EC] < end_height)
+                gnd_mask = (gnd_ds[heightvar_gnd] >= start_height) & (gnd_ds[heightvar_gnd] < end_height)
+                
+                sat_slice = sat_ds[var].where(sat_mask)
+                gnd_slice = gnd_ds[var].where(gnd_mask)
+                
+                # Check if we have any valid data in this range
+                if sat_slice.count() == 0 or gnd_slice.count() == 0:
+                    continue
+                
+                # Calculate averages for the window
+                sat_avg = float(sat_slice.mean(skipna=True))
+                gnd_avg = float(gnd_slice.mean(skipna=True))
+                # Calculate percentage difference
+                if sat_avg != 0 and not np.isnan(sat_avg) and not np.isnan(gnd_avg):
+                    pct_diff = abs((gnd_avg - sat_avg) / sat_avg * 100)
+                    
+                    # If difference exceeds threshold, replace values with NaN
+                    if pct_diff > threshold:
+                        filtered_gnd[var] = filtered_gnd[var].where(
+                            ~((filtered_gnd[heightvar_gnd] >= start_height) & 
+                              (filtered_gnd[heightvar_gnd] < end_height)), 
+                            np.nan)
+            
+            except Exception as e:
+                print(f"Error processing {var} at height range {start_height}-{end_height}: {e}")
+                continue
+                    
+    return filtered_gnd
