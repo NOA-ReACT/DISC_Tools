@@ -148,6 +148,7 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
         if xlim is not None:
             ax.set_xlim(xlim)
             
+        ax.axvline(x=0, color='grey', linestyle='-', alpha=0.5, linewidth=1)           
         ax.tick_params(axis='both', which='major', labelsize=11, length=7)
         ax.tick_params(axis='both', which='minor', labelsize=10, length=4)
         ax.grid(True, which='major', linestyle='-', alpha=0.2)
@@ -178,7 +179,8 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
         
         if xlim_log is not None:
             ax_log.set_xlim(xlim_log)
-            
+        
+        ax_log.axvspan(-0.005, 0.005, color='grey', linestyle='--', linewidth=1)          
         ax_log.tick_params(axis='both', which='major', labelsize=11, length=7)
         ax_log.tick_params(axis='both', which='minor', labelsize=10, length=4)
         ax_log.grid(True, which='major', linestyle='-', alpha=0.2)
@@ -331,7 +333,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
                          
         if xlim is not None:
             ax.set_xlim(xlim)
-            
+        ax.axvspan(-0.005, 0.005, color='grey', linestyle='--', linewidth=1)          
         ax.tick_params(axis='both', which='major', labelsize=11, length=10)
         ax.tick_params(axis='both', which='minor', labelsize=10, length=10)
         ax.grid(True, which='major', linestyle='-', alpha=0.2)
@@ -359,6 +361,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         if xlim_log is not None:
             ax_log.set_xlim(xlim_log)
             
+        ax_log.axvspan(-0.005, 0.005, color='grey', linestyle='--', linewidth=1)          
         ax_log.tick_params(axis='x', which='major', labelsize=11, length=6)
         ax_log.tick_params(axis='x', which='minor', labelsize=10, length=4)
         ax_log.grid(True, which='major', linestyle='-', alpha=0.2)

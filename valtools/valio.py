@@ -149,7 +149,7 @@ def load_ground_data(network, data_path, data_type='L1', smoothing= None,
 
     elif network == 'LICHT':
         gnd_quicklook, gnd_profile, station_coordinates, station_name = read_RV_meteor(data_path, 
-                                                 time_window=60)
+                                                 time_hwindow=60)
         
               
     else:

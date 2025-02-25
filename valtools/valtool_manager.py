@@ -278,21 +278,29 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     time = (aebd_50km['time'])[idx]
     overpass_time = pd.Timestamp(time.item()).strftime('%d-%m-%Y %H:%M:%S.%f')[:-4]
     
+    gnd_overpass_time = pd.Timestamp(gnd_profiles['time'].values.item()).strftime('%d-%m-%Y %H:%M:%S.%f')[:-4]
+    gnd_overpass_time_fname = pd.Timestamp(gnd_profiles['time'].values.item()).strftime('%H_%M_%S')
+    
     # Initialize figure
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(10, 8, figure=fig, width_ratios=[1, 1, 1, 1.3, 1.3, 1.3, 1.3,
                  1.2], height_ratios=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], hspace=1.8,
                  wspace=0.6, top=0.85)
     
-    if keyword:
-        keyphrase = f'- {keyword} Retrieval' 
-    else: 
-        keyphrase = ' '
-    # Add main title
-    fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with\n'
-                 f' {station_name} Ground Station  L2 {network} network {keyphrase} \n'
-                 f'{overpass_time} UTC',
-                 fontsize=26, weight='bold', va='top', y=.96)
+    if network == 'LICHT':
+        lidar_name = 'MPI LICHT' # PollyXT # THELISYS
+
+        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with\n'
+                     f' {station_name} Ground Station - {lidar_name} L2 Retrieval \n'
+                     f'ECA: {overpass_time} UTC\n'
+                     f'{lidar_name}: {gnd_overpass_time} UTC\n',
+                     fontsize=26, weight='bold', va='top', y=.96)
+    else:
+        # Add main title
+        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with\n'
+                     f' {station_name} Ground Station  L2 {network} network {keyword} \n'
+                     f'{overpass_time} UTC',
+                     fontsize=26, weight='bold', va='top', y=.96)
 
 
     # Create and adjust quicklook axes
@@ -435,8 +443,15 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     # Save figure if destination directory provided
     # Change time format to avoid saving errors.
     overpass_time_s = pd.Timestamp(time.item()).strftime('%d_%m_%Y_%H_%M_%S.%f')[:-4] 
-    if dstdir:
+
+    if network == 'LICHT':
+        alt_label = '_'+str(int(DEFAULT_CONFIG_L2['HMAX']))+'m'
+        dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}{alt_label}.png'
+    else:
         dstfile = f'{overpass_time_s}_L2_intercomparison_{keyword}.png'
+
+    
+    if dstdir:
         fig.savefig(os.path.join(dstdir, dstfile), bbox_inches='tight', dpi=300)    
     # Adjust layout
     plt.tight_layout(rect=[0.1, 0.1, 0.88, 0.82])
