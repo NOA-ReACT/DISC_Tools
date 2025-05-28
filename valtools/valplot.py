@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Feb 12 01:03:43 2025
 
-Supporting plotting funtions for the 
+Data plotting module for EarthCARE analysis tools.
 
-@author: akaripis
+
 """
 
 import matplotlib.pyplot as plt
@@ -18,12 +17,13 @@ import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
 import numpy as np
+from scipy.signal import savgol_filter
 
 
 from val_L2_dictionaries import*
 
 # Set the Seaborn style and font
-sns.set(context='paper', style='white', palette='deep', font_scale=1.7, 
+sns.set_theme(context='paper', style='white', palette='deep', font_scale=1.7, 
         color_codes=True)
 
 def adjust_subplot_position(ax, x_offset=0.02, y_offset=0, width_scale=1, 
@@ -101,15 +101,15 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
     # Define color schemes
     colors = {
         'EC': {
-            'line': '#0066CC',
+            'line': '#1f77b4',
             'error': '#99CCFF',
-            'log': '#0066CC',
+            'log': '#1f77b4',
             'labels': ('EC lin', 'EC log')
         },
         'SM': {
-            'line': '#009E73',
-            'error': '#FFCC99',
-            'log': '#FF8800',
+            'line': '#B68AC9',
+            'error': '#B68AC9',
+            'log': '#B68AC9',
             'labels': ('SM lin', 'SM log')
         }
     }
@@ -123,12 +123,17 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
     error =ds[f"{varname}_total_error"].mean('along_track')*1e6
 
     if profile == 'EC':
-        height = ds[heightvar].mean(dim='along_track')
-    else:
+        or_height = ds[heightvar]-ds['geoid_offset']
+        height = or_height.mean(dim='along_track')
+        # height = ds[heightvar].mean(dim='along_track')
+    else: 
         height = ds[heightvar].mean(dim='along_track')[::-1]
         
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 20))
+    else:
+    # Get the current figure if ax is provided
+        fig = ax.figure
         
     lines_linear, labels_line = [], []
     lines_log, labels_log = [], []
@@ -143,7 +148,7 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
                          var - error, var + error,
                          color=color_scheme['error'],
                          label=f"{color_scheme['labels'][0]} error",
-                         alpha=0.3)
+                         alpha=0.2)
                          
         if xlim is not None:
             ax.set_xlim(xlim)
@@ -160,12 +165,11 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
         lines_linear, labels_line = ax.get_legend_handles_labels()
     else:
         ax_log = ax
-        lines_linear, labels_line = [], []
         
     if log_scale:
         log_line = ax_log.step(var, height,
                               color=color_scheme['log'],
-                              linestyle='--',
+                              linestyle='-',
                               linewidth=1.5,
                               label=color_scheme['labels'][1])
                               
@@ -173,14 +177,14 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
                             var - error, var + error,
                             color=color_scheme['error'],
                             label=f"{color_scheme['labels'][1]} error",
-                            alpha=0.3)
+                            alpha=0.1)
                             
         ax_log.set_xscale('log')
         
         if xlim_log is not None:
             ax_log.set_xlim(xlim_log)
         
-        ax_log.axvspan(-0.005, 0.005, color='grey', linestyle='--', linewidth=1)          
+        #ax_log.axvspan(-0.005, 0.005, color='grey', linestyle='-', alpha=0.4,linewidth=1)          
         ax_log.tick_params(axis='both', which='major', labelsize=11, length=7)
         ax_log.tick_params(axis='both', which='minor', labelsize=10, length=4)
         ax_log.grid(True, which='major', linestyle='-', alpha=0.2)
@@ -197,7 +201,7 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
     if yticks:
         ax.set_yticklabels([f'{int(pos/1000)}' for pos in ytick_positions],
                           fontsize=12)
-        ax.set_ylabel('Height (km)', fontsize=16, labelpad=10)
+        ax.set_ylabel('Height a.s.l (km)', fontsize=16, labelpad=10)
     else:
         ax.set_yticklabels([])
         
@@ -219,9 +223,10 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
         ax.set_title(f'{title}', fontsize=14, fontweight='bold')
 
 def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None,
-                      profile='EC', timevar='time', heightvar='height',
-                      title=None, lin_scale=True, log_scale=False, xlim=None,
-                      xlim_log=None, yticks=True, xlabel=True, legend=False):
+                      profile='EC',  heightvar='height', title=None, lin_scale=True,
+                      log_scale=False, xlim=None, xlim_log=None, yticks=True, 
+                      xlabel=True, legend=False,  smoothing=False):
+    
     """
    Plot EarthCARE profiles with error ranges. Dictionaries set up for: backscatter 
    coefficient, extinction coefficient, lidar ratio and volume depolarization. Other 
@@ -257,7 +262,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
             'log': '#0066CC',
             'labels': ('EC lin', 'EC log'),
             'lin_linewidth': '2.5',
-            'log_linewidth': '2',
+            'log_linewidth': '2.5',
             'alpha': 0.4
 
         },
@@ -266,12 +271,11 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
             'error': '#B68AC9',
             'log': '#B68AC9',
             'labels': ('GND lin', 'GND log'),
-            'lin_linewidth': '1.8',
-            'log_linewidth': '1.3',
+            'lin_linewidth': '2',
+            'log_linewidth': '2',
             'alpha': 0.2
         }
     }
-    
     labels = {
         'particle_backscatter_coefficient_355nm': r'$ \beta_{355}$_' + profile,
         'particle_extinction_coefficient_355nm': r'$ \alpha_{355}$_' + profile,
@@ -285,16 +289,8 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         'lidar_ratio_355nm': '[sr]',
         'particle_linear_depol_ratio_355nm': '[-] '
     }
-    
-
-    if resolution == 'high':
-        suffix = ''
-    elif resolution == 'medium':
-        suffix = '_medium_resolution'
-    else:
-        suffix = '_low_resolution'
-        
-    varname = varname if resolution is None else varname + suffix
+      
+    varname = f'{varname}_{resolution}_resolution' if resolution in ['medium', 'low'] else varname
     
     if idx is None:
         idx = slice(None)
@@ -303,15 +299,23 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         raise ValueError(f'Profile must be one of {list(colors.keys())}')
         
     color_scheme = colors[profile]
-    
+
     if varname in ['particle_backscatter_coefficient_355nm',
-                   'particle_extinction_coefficient_355nm']:
+                   'particle_extinction_coefficient_355nm',
+                   'particle_backscatter_coefficient_355nm_low_resolution',
+                   'particle_extinction_coefficient_355nm_low_resolution',
+                   'particle_backscatter_coefficient_355nm_medium_resolution',
+                   'particle_extinction_coefficient_355nm_medium_resolution']:
         var = ds[varname][idx] * 1e6
         error = ds[f'{varname}_error'][idx] * 1e6
+        if smoothing:
+            var = savgol_filter(var, window_length=31, polyorder=3)
     else:
         var = ds[varname][idx]
+        if smoothing:
+            var = savgol_filter(var, window_length=31, polyorder=3)
         error = ds[f'{varname}_error'][idx]
-        
+
     if profile == 'EC':
         height = ds[heightvar][idx]
     else:
@@ -319,13 +323,25 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 12))
+    else:
+    # Get the current figure if ax is provided
+        fig = ax.figure
         
     lines_linear, labels_line = [], []
     lines_log, labels_log = [], []
     
+    # First, remove any resolution suffix
+    base_var = varname.split('_medium_resolution')[0].split('_low_resolution')[0]
+    # Then remove the '_r' or '_k' suffix if present
+    if base_var.endswith('_r') or base_var.endswith('_k'):
+        base_var = base_var[:-2]  # Remove the last 2 characters ('_r' or '_k')
+    
+    # Use this cleaned variable name to get the label
+    label = labels[base_var]
+    
     if lin_scale:
         main_line = ax.step(var, height, color=color_scheme['line'],
-                           label=labels[varname.split('_medium_resolution')[0].split('_low_resolution')[0]],
+                            label = labels[base_var],
                            linewidth=color_scheme['lin_linewidth'])
                            
         ax.fill_betweenx(height, var - error, var + error, color=color_scheme['error'],
@@ -348,7 +364,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         lines_linear, labels_line = [], []
         
     if log_scale:
-        log_line = ax_log.step(var, height, color=color_scheme['log'], linestyle='--',
+        log_line = ax_log.step(var, height, color=color_scheme['log'], linestyle='-',
                               linewidth=color_scheme['log_linewidth'], 
                               label=color_scheme['labels'][1])
                               
@@ -378,7 +394,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
     if yticks:
         ax.set_yticklabels([f'{int(pos/1000)}' for pos in ytick_positions],
                           fontsize=12)
-        ax.set_ylabel('Height (km)', fontsize=16, labelpad=10)
+        ax.set_ylabel('Height a.s.l (km)', fontsize=16, labelpad=10)
     else:
         ax.set_yticklabels([])
         
@@ -395,8 +411,8 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         ax.set_title(f"{title}",fontsize=14, fontweight='bold')
         
 
-def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None, 
-                    heightvar='height', title=None, yticks=True, plot_type='classification',
+def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, 
+                    title=None, yticks=True, plot_type='classification',
                     x_offset=None, legend_number=1, xlim=False):
     """
     Plots scatter profile for A-EBD product
@@ -586,6 +602,7 @@ def plot_profile_comparison(ec_data, sim_data, variables, axes=None, hmax=15e3,
     """
     
     # Create figure and axes if not provided
+    fig = None
     if axes is None:
         n_vars = len(variables)
         fig, axes = plt.subplots(nrows=1,ncols=n_vars, figsize=(8, 15), 
@@ -593,18 +610,14 @@ def plot_profile_comparison(ec_data, sim_data, variables, axes=None, hmax=15e3,
         # Ensure axes is always a list
         if n_vars == 1:
             axes = [axes]
-    else:
-        fig = None
-        if len(variables) != len(axes):
-            raise ValueError(f"Number of variables ({len(variables)}) must match number of axes ({len(axes)})")
+    elif len(variables) != len(axes):
+        raise ValueError(f"Number of variables ({len(variables)}) must match number of axes ({len(axes)})")
 
     # Handle xlim_log if it's a single tuple
     if isinstance(xlim_log, tuple):
         xlim_log = [xlim_log] * len(variables)
         
-    if len(variables) != len(axes):
-        raise ValueError(f"Number of variables ({len(variables)}) must match number of axes ({len(axes)})")
-    
+
     for i, (variable, ax) in enumerate(zip(variables, axes)):
         current_xlim = xlim[i] if xlim is not None else None
         current_xlim_log = xlim_log[i] if xlim_log is not None else (1e-1, 1e1)
@@ -619,10 +632,10 @@ def plot_profile_comparison(ec_data, sim_data, variables, axes=None, hmax=15e3,
         fig.tight_layout()
     
 def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates, 
-                    shortest_distance, buffer=1.2, zoom_level=8, 
-                    distance_idx_nearest=None, plot_station=True, ax=None):
+                    shortest_distance, max_distance, buffer=1.4, lat2=None, 
+                    lon2=None, distance_idx_nearest=None, idx=None, ax=None):
     """
-    Plots the satellite orbit path on a map with a 100km radius circle around 
+    Plots the satellite orbit path on a map with a 'max_distance' radius circle around 
     the station.
     
     Parameters:
@@ -631,8 +644,6 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
     - station_name: Name of the ground station to plot.
     - station_coordinates: Tuple (latitude, longitude) of the ground station.
     - buffer: Degrees to extend the map boundaries around the satellite path.
-    - zoom_level: Zoom level for the map tiles.
-    - plot_station: Whether to plot the ground station on the map.
     - ax: Matplotlib axis to use for the plot. If None, creates a new figure.
     """
     
@@ -642,7 +653,7 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
     lat_min = station_lat - 1.5 * buffer
     lat_max = station_lat + 1.5 * buffer
     lon_min = station_lon - buffer
-    lon_max = station_lon + buffer
+    lon_max = station_lon + 1.2*buffer
     
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 20),
@@ -683,12 +694,12 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
             
         return circle_lats, circle_lons
         
-    circle_lats, circle_lons = create_circle_coords(station_lat, station_lon, 100)
+    circle_lats, circle_lons = create_circle_coords(station_lat, station_lon, max_distance)
     
     poly = plt.Polygon(np.column_stack((circle_lons, circle_lats)),
                       facecolor='red', alpha=0.2,
                       transform=ccrs.PlateCarree(),
-                      label='100km radius')
+                      label=f'{max_distance} radius')
     ax.add_patch(poly)
     
     ax.scatter(station_coordinates[1], station_coordinates[0],
@@ -697,8 +708,8 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
               
     ax.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor='black')
     ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-    ax.add_feature(cfeature.LAND, facecolor='white')
-    ax.add_feature(cfeature.OCEAN, facecolor='lightgray')
+    ax.add_feature(cfeature.LAND, facecolor='#f5f2e8')  # Light beige/cream color
+    ax.add_feature(cfeature.OCEAN, facecolor='#a8d5e2')
     
     gl = ax.gridlines(draw_labels=True, linewidth=0.2,
                      color='black', alpha=0.5, linestyle='--',
@@ -713,9 +724,26 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
     gl.xlabel_style = {'size': 10, 'color': 'black'}
     gl.ylabel_style = {'size': 10, 'color': 'black'}
     
-    ax.set_title(f'Min. distance: \n {shortest_distance:.1f} km',
-                fontsize=15, pad=8)
+    from geopy.distance import geodesic
+   
+    if idx == slice(None):
+        ax.set_title(f'Min. distance: \n {shortest_distance:.1f} km',
+                    fontsize=15, pad=8)
+    else:
+        
+        profile_lat = lat2[idx]
+        profile_lon = lon2[idx]
+        
+        # Calculate distance using geopy's geodesic distance
+        station_point = (station_lat, station_lon)
+        profile_point = (profile_lat, profile_lon)
+        
+        profile_distance = geodesic(station_point, profile_point).kilometers
+        
+        ax.set_title(f'Min. distance: {shortest_distance:.1f} km\nProfile distance: {profile_distance:.1f} km',
+                    fontsize=15, pad=8)
+
+        
     ax.legend(loc='lower left', fontsize=9)
     
     plt.show()
-

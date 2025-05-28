@@ -24,9 +24,8 @@ Visualization Components:
        - Data acquisition track (red)
        - 100km radius around station
 
-Author: Andreas Karipis
-Institution: Remote Sensing of Aerosols, Clouds and Trace gases (ReaCT)
-Organization: National Observatory of Athens (NOA)
+Author: Andreas Karipis, Maria Tsichla, Peristera Paschou, Eleni Marinou, Ping Wang
+Conctact: a.karipis@noa.gr, elmarinou@noa.gr
 Version: 1.0.0
 """
 import sys
@@ -55,7 +54,6 @@ def main():
                                         profile plots, default: False
     """
     # Input paths
-    # root_dir = "/home/akaripis/earthcare/files/20241212"
     root_dir = DEFAULT_CONFIG_L1['ROOT_DIR']
     PATHS = build_paths(root_dir, DEFAULT_CONFIG_L1['NETWORK'],'L1')
     

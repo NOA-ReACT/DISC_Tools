@@ -33,6 +33,7 @@ classification_color_dict = {-3: 'pink',
                              27: 'lightsalmon',
                              101: 'orangered',
                              102: 'red',
+                             103: 'red', #manual edit worng
                              104: 'darkred',
                              105: 'lightgray',
                              106: 'grey',
@@ -61,6 +62,7 @@ classification_dict = {-3:'Missing Data',
                        27:'Strat. Smoke', # 'Stratospheric_Smoke'
                       101:'Unknown AT',#: Aerosol Target has a very low probability (no class assigned)',
                       102:'Unknown AC',#: Aerosol classification outside of param space',
+                      103:'Unknown AC',#: Aerosol classification outside of param space', ###manual edit worng
                       104:'Unknown SAT',#: Strat. Aerosol Target has a very low probability (no class assigned)',
                       105:'Unknown SAC',#: Strat. Aerosol classification outside of param space',
                       106:'Unknown PSCT',#: PSC Target has a very low probability (no class assigned)',

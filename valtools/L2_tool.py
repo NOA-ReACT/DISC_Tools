@@ -15,16 +15,16 @@ Visualization Components:
     4. Classification and quality status plot
     5. Geographical map
 
-Author: Andreas Karipis
-Institution: Remote Sensing of Aerosols, Clouds and Trace gases (ReaCT)
-Organization: National Observatory of Athens (NOA)
+Author: Andreas Karipis, Maria Tsichla, Peristera Paschou, Eleni Marinou, Ping Wang
+Conctact: a.karipis@noa.gr, elmarinou@noa.gr
 Version: 1.0.0
 """
 
 import sys
-sys.path.append('/home/akaripis/earthcare')
-import matplotlib.pyplot as plt
+# optional, in case ectools and valtools are in different folders
+sys.path.append('/home/akaripis/earthcare')  
 
+import matplotlib.pyplot as plt
 from valtool_manager import plot_EC_L2_comparison
 from valio import build_paths
 from valconfig import DEFAULT_CONFIG_L2
@@ -62,7 +62,8 @@ def main():
                                   gndfolderpath=PATHS['GND'], dstdir=PATHS['OUTPUT'], 
                                   resolution=DEFAULT_CONFIG_L2['RESOLUTION'],
                                   network = DEFAULT_CONFIG_L2['NETWORK'], 
-                                  fig_scale =DEFAULT_CONFIG_L2['FIG_SCALE'])
+                                  fig_scale =DEFAULT_CONFIG_L2['FIG_SCALE'],
+                                  smoothing=DEFAULT_CONFIG_L2['SMOOTHING'] )
         plt.show()
     except Exception as e:
         print(f'Error in main execution: {str(e)}')

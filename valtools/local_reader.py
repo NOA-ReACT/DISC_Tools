@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Feb 21 12:06:09 2025
+Data Processing Module
 
-Contains the reader functions for Thelisys and RV meteor 
+Processes two types of local data inputs:
+1. RV meteor data from the campaign
+2. THELISYS data for visualization in the L1/L2 visuaization tool
 
+Author: Andreas Karipis, Peristera Paschou
 
-@author: peristera, andreas
 """
 
 import xarray as xr
@@ -16,7 +18,6 @@ import os
 import glob
 
 import netCDF4
-import pdb
 
 DEFAULT_CONFIG_R = {'convfactor_dp355': 1,
                     'convfactor_dp355_err': 0,
@@ -242,4 +243,112 @@ def read_RV_meteor(data_path, time_hwindow, ovp_hwindow=10,
     
     else:
         raise AttributeError(f'No licht file found in dir: {data_path} \nCheck your input paths')
+    
 
+def read_thelisys_data(d, fname, gnd_id):
+    """
+    Reader function for THELISYS (SULA) profiles that returns an xarray Dataset.
+    
+    Parameters:
+    -----------
+    d : netCDF4.Dataset        | The opened netCDF dataset
+    fname : str                | Filename of the netCDF file
+    gnd_id : str               | Ground identifier
+        
+    Returns:
+    --------
+    xr.Dataset
+        xarray Dataset containing extracted and processed data
+    """
+    if gnd_id != 'thelisys':
+        return None
+    
+    # Extract parts of the file name 
+    date_str = f'{fname[18:22]}_{fname[22:24]}_{fname[24:26]}'
+    time_str = f'{fname[27:31]}_{fname[33:37]}'
+    
+    # Get altitude and create coordinates
+    altitude = d.variables["altitude"][:] * 1E-3  # units km
+    
+    # Create base xarray dataset with coordinates
+    ds = xr.Dataset(
+        coords={
+            'altitude': ('altitude', altitude),
+        },
+        attrs={
+            'date_str': date_str,
+            'time_str': time_str,
+            'source': fname,
+            'ground_id': gnd_id
+        }
+    )
+    
+    # Define variable names and their conversion factors
+    var_mapping = {
+        'RB355': ('backscatter_raman', 1E6),                # 1/(Mm*sr)
+        'RB355_ERROR': ('backscatter_raman_error', 1E6),    # 1/(Mm*sr)
+        'KB355': ('backscatter_klett', 1E6),                # 1/(Mm*sr)
+        'KB355_ERROR': ('backscatter_klett_error', 1E6),    # 1/(Mm*sr)
+        'EXT355': ('extinction', 1E6),                      # 1/Mm
+        'EXT355_ERROR': ('extinction_error', 1E6),          # 1/Mm
+        'LR355': ('lidar_ratio', 1.0),                      # sr
+        'LR355_ERROR': ('lidar_ratio_error', 1.0),          # sr
+    }
+    
+    # Add variables to dataset efficiently
+    for nc_var, (xr_var, factor) in var_mapping.items():
+        if nc_var in d.variables:
+            # Most variables have shape (time=1, altitude)
+            data = d.variables[nc_var][0, :] * factor
+            ds[xr_var] = ('altitude', data)
+            
+            # Copy attributes from original dataset if they exist
+            if hasattr(d.variables[nc_var], 'attrs'):
+                ds[xr_var].attrs = d.variables[nc_var].attrs.copy()
+            
+            # Add units information based on our conversions
+            if '_ERROR' not in nc_var:
+                if 'backscatter' in xr_var:
+                    ds[xr_var].attrs['units'] = '1/(Mm*sr)'
+                elif 'extinction' in xr_var:
+                    ds[xr_var].attrs['units'] = '1/Mm'
+                elif 'lidar_ratio' in xr_var:
+                    ds[xr_var].attrs['units'] = 'sr'
+    
+    # Handle depolarization separately due to wavelength conversion
+    if 'PLDR532' in d.variables:
+        # Constants for conversion
+        convfactor_dp355 = 0.85
+        convfactor_dp355_err = 0.1
+        
+        # Get original data
+        pdr532 = d.variables['PLDR532'][0, :]
+        pdr532_err = d.variables['PLDR532_ERROR'][0, :]
+        
+        # Convert to 355nm wavelength
+        pdr355_raman = pdr532 * convfactor_dp355
+        pdr355_klett = pdr532 * convfactor_dp355
+        
+        # Error propagation: yi*sqrt((c_err/c)^2 + (xi_err/xi)^2)
+        # Avoid division by zero errors
+        valid_indices = (pdr532 != 0)
+        pdr355_err = np.zeros_like(pdr532)
+        if np.any(valid_indices):
+            pdr355_err[valid_indices] = pdr355_raman[valid_indices] * np.sqrt(
+                (convfactor_dp355_err/convfactor_dp355)**2 + 
+                (pdr532_err[valid_indices]/pdr532[valid_indices])**2
+            )
+        
+        # Add to dataset
+        ds['particledepolarization_raman'] = ('altitude', pdr355_raman)
+        ds['particledepolarization_raman_error'] = ('altitude', pdr355_err)
+        ds['particledepolarization_klett'] = ('altitude', pdr355_klett)
+        ds['particledepolarization_klett_error'] = ('altitude', pdr355_err)
+        
+        # Add metadata
+        ds['particledepolarization_raman'].attrs['units'] = 'ratio'
+        ds['particledepolarization_raman'].attrs['wavelength'] = '355nm (converted from 532nm)'
+        ds['particledepolarization_klett'].attrs['units'] = 'ratio'
+        ds['particledepolarization_klett'].attrs['wavelength'] = '355nm (converted from 532nm)'
+    
+    return ds
