@@ -143,7 +143,7 @@ def trim_to_timeslice(ds, timeslice, along_track_dim='along_track', timevar='tim
 
                    
 def trim_to_latslice(ds, latslice, along_track_dim='along_track', latitudevar='latitude', isel_nadir=None, sel_nadir=None):
-    if isel_nadir is not None & sel_nadir is not None:
+    if (isel_nadir is not None) & (sel_nadir is not None):
         print("Specify either isel_nadir or sel_nadir, but not both.")
     
     _ds = ds.swap_dims({along_track_dim:latitudevar})
@@ -160,7 +160,7 @@ def trim_to_latslice(ds, latslice, along_track_dim='along_track', latitudevar='l
 def load_EC_product(srcglob, trim=True, 
                     group='ScienceData', i=-1, renamer={}, 
                     alongtrackvar='along_track', timevar='time', latitudevar='latitude',
-                    isel_nadir=None, sel_nadir=None,
+                    isel_nadir=None, sel_nadir=None, preprocess_for_NaT=False,
                     verbose=True):
     srcfiles = sorted(glob(srcglob))
     
@@ -175,8 +175,14 @@ def load_EC_product(srcglob, trim=True,
     else:
         print(f"No EarthCARE product files match path {srcglob}.")
         return None
+
+    if preprocess_for_NaT:
+        ds = xr.open_dataset(srcfile, group=group, decode_times=False)
+        ds[timevar] = ds[timevar].where(ds[timevar] < 1e36)
+        ds = xr.decode_cf(ds)
+    else:
+        ds = xr.open_dataset(srcfile, group=group).rename(renamer)
         
-    ds = xr.open_dataset(srcfile, group=group).rename(renamer)
     if alongtrackvar in ds.dims:
         ds[alongtrackvar] = ds[alongtrackvar]
         
@@ -205,13 +211,42 @@ def get_filelist(srcpath, prodmod_code="*", product_code="*", frame_datetime="*"
 
     return sorted(glob(srcpath))
 
+def get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure):
+    import pandas as pd
+    
+    if not srcpath.endswith(".h5"):
+        if nested_directory_structure:
+            if frame_datetime != "*":
+                frame_dt = pd.to_datetime(frame_datetime.split("T")[0])
+                
+                srcdir  = f"{srcpath}/{frame_dt:%Y}/{frame_dt:%m}/{frame_dt:%d}"
+                srcstr  = f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}"
+                srcpath = f"{srcdir}/{srcstr}/{srcstr}.h5"
+                
+            else:
+                srcdir  = f"{srcpath}/*/*/*"
+                srcstr  = f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}"
+                srcpath = f"{srcdir}/{srcstr}/{srcstr}.h5"
+            
+        else:    
+            srcstr  = f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}"
+            srcpath = f"{srcpath}/{srcstr}/{srcstr}.h5"
+
+    return srcpath
+
+########################
+##### AUX products #####
+########################
 
 def load_XJSG(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="AUX_JSG_1D", 
               frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=False, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
+              trim=False, group='ScienceData', i=-1, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
     
     ds = load_EC_product(srcpath, trim=trim, group=group, i=i)
     
@@ -221,78 +256,72 @@ def load_XJSG(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="AUX_JSG_1D
         ds.time.attrs['units'] = 's since 2000-01-01 00:00:00.00'
     return ds
 
+
 def load_XMET(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="AUX_MET_1D", 
               frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=False, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
+              trim=False, group='ScienceData', i=-1, nested_directory_structure=False):
     
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    if trim:
+        print("Can't trim X-MET")
+        trim = False
+        
     ds = load_EC_product(srcpath, trim=trim, group=group, i=i)
     return ds
 
+
+#######################
+##### L1 products #####
+#######################
+
+##### ATLID #####
+
 def load_ANOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_NOM_1B", 
               frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=False, group='ScienceData', i=-1, latvar='ellipsoid_latitude'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    ds = load_EC_product(srcpath, trim=trim, group=group, i=i, latitudevar=latvar)
+              trim=False, group='ScienceData', i=-1, latvar='ellipsoid_latitude', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group=group, i=i, latitudevar=latvar)
+    
     if ds:
-        ds['latitude'] = ds.sample_latitude.isel(height=237)
-        ds['longitude'] = ds.sample_longitude.isel(height=237)
+        ds['latitude'] = ds.ellipsoid_latitude
+        ds['longitude'] = ds.ellipsoid_longitude
+        
+    # Sometimes need to merge/rename some dummy dimensions
+    renamer={}
+    for d in ['dim_0', 'dim_1']:
+        if d in ds.dims:
+            if len(ds[d]) == len(ds['along_track']):
+                renamer.update({d:'along_track'})
+            elif len(ds[d]) == len(ds['height']):
+                renamer.update({d:'height'})
+    ds = ds.rename(renamer)     
+
+    # Couldn't trim until geo group merged with data group
+    if trim:
+        ds = trim_to_frame(ds, latvar=latvar)
+    
+
     return ds
 
-def load_AFM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_FM__2A", 
-             frame_datetime="*", production_datetime="*", frame_code="*",
-             trim=True, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_AEBD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_EBD_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_AAER(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_AER_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_AICE(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_ICE_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_ATC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_TC__2A", 
-             frame_datetime="*", production_datetime="*", frame_code="*",
-             trim=True, group='ScienceData', i=-1):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
+##### CPR #####
     
 def load_CNOM(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="CPR_NOM_1B",
               frame_datetime="*", production_datetime="*", frame_code="*",
               trim=True, i=-1, convert_to_dB=True,
               renamer_datagroup={'phony_dim_10':'along_track', 'phony_dim_11':'CPR_height'},
-              renamer_geogroup ={'phony_dim_14':'along_track', 'phony_dim_15':'CPR_height'}):
+              renamer_geogroup ={'phony_dim_14':'along_track', 'phony_dim_15':'CPR_height'}, 
+              nested_directory_structure=False):
     
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
         
     ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
     
@@ -314,170 +343,16 @@ def load_CNOM(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="CPR_NOM_1B
     
     return ds
 
-def load_CCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="CPR_CLP_2A",
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, i=-1, convert_to_dB=True,
-              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
-              renamer_geogroup ={'phony_dim_6':'along_track', 'phony_dim_7':'CPR_height'}):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-        
-    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
-    
-    if ds:
-        # merging in data from the Geo group (for geolocation)
-        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
-        ds = xr.merge([ds, _geo])
-        ds.encoding['source'] = _geo.encoding['source']
-        _geo.close()
-            
-        # Couldn't trim until geo group merged with data group
-        if trim:
-            ds = trim_to_frame(ds, latvar='latitude')
-    
-    return ds
+##### MSI #####
 
-def load_ACCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="AC__CLP_2B",
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, i=-1, convert_to_dB=True,
-              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
-              renamer_geogroup ={'phony_dim_7':'along_track', 'phony_dim_8':'CPR_height'}):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-        
-    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
-    
-    if ds:
-        print(ds.dims)
-        # merging in data from the Geo group (for geolocation)
-        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
-        print(_geo.dims)
-        ds = xr.merge([ds, _geo])
-        ds.encoding['source'] = _geo.encoding['source']
-        _geo.close()
-            
-        # Couldn't trim until geo group merged with data group
-        if trim:
-            ds = trim_to_frame(ds, latvar='latitude')
-    
-    return ds
-
-
-def load_ACMCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="ACM_CLP_2B",
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, i=-1, convert_to_dB=True,
-              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
-              renamer_geogroup ={'phony_dim_6':'along_track', 'phony_dim_7':'CPR_height'}):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-        
-    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
-    
-    if ds:
-        print(ds.dims)
-        # merging in data from the Geo group (for geolocation)
-        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
-        print(_geo.dims)
-        ds = xr.merge([ds, _geo])
-        ds.encoding['source'] = _geo.encoding['source']
-        _geo.close()
-            
-        # Couldn't trim until geo group merged with data group
-        if trim:
-            ds = trim_to_frame(ds, latvar='latitude')
-    
-    return ds
-
-def load_CFMR(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_FMR_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_CCD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_CD__2A", 
-             frame_datetime="*", production_datetime="*", frame_code="*",
-             trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-
-def load_CTC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_TC__2A", 
-             frame_datetime="*", production_datetime="*", frame_code="*",
-             trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-
-def load_CCLD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_CLD_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*",
-              trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-
-def load_ACTC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="AC__TC__2B", 
-              frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-
-def load_ACMCAP(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_CAP_2B", 
-                frame_datetime="*", production_datetime="*", frame_code="*", 
-                trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-
-def load_ACMCOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_COM_2B", 
-                frame_datetime="*", production_datetime="*", frame_code="*", 
-                trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i, renamer={'latitude_active':'latitude', 'longitude_active':'longitude'})
-
-def load_ACMRT(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_RT__2B", 
-                frame_datetime="*", production_datetime="*", frame_code="*", 
-                trim=False, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-
-def load_ALLDF(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ALL_DF__2B", 
-                frame_datetime="*", production_datetime="*", frame_code="*", 
-                trim=True, i=-1, group='ScienceData'):
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-                f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    return load_EC_product(srcpath, trim=trim, group=group, i=i)
-    
 def load_MRGR(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_RGR_1C", 
               frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=284):
+              trim=True, i=-1, group='ScienceData', idx_nadir=284, nested_directory_structure=False):
     
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
     ds = load_EC_product(srcpath, trim=False, group=group, i=i)
                          
     if ds:
@@ -500,11 +375,12 @@ def load_MRGR(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_RGR_1C
 
 def load_MNOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_NOM_1B", 
               frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=284):
+              trim=True, i=-1, group='ScienceData', idx_nadir=284, nested_directory_structure=False):
     
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
     ds = load_EC_product(srcpath, trim=False, group=group, i=i)
                          
     if ds:
@@ -515,68 +391,16 @@ def load_MNOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_NOM_1B
     return ds
 
 
-# load MSI Level 2a
-def load_MCM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_CM__2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=284):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
-                         
-    sel_nadir={'across_track':idx_nadir}
-    if trim:
-        ds = trim_to_frame(ds, latvar='latitude', isel_nadir=sel_nadir)
-
-    if ds is not None:
-        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
-                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
-    
-
-def load_MCOP(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_COP_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=284):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
-                         
-    sel_nadir={'across_track':idx_nadir}
-    if trim:
-        ds = trim_to_frame(ds, latvar='latitude', isel_nadir=sel_nadir)
-
-    if ds is not None:
-        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
-                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
-
-
-def load_MAOT(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_AOT_2A", 
-              frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=284):
-    
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
-                         
-    sel_nadir={'across_track':idx_nadir}
-    if trim:
-        ds = trim_to_frame(ds, latvar='latitude', sel_nadir=sel_nadir)
-        
-    if ds is not None:
-        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
-                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
-
+##### BBR #####
 
 def load_BNOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="BBR_NOM_1B", 
               frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData/full'):
+              trim=True, i=-1, group='ScienceData/full', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
 
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
     ds = load_EC_product(srcpath, trim=False, group=group, i=i)
     
     if trim:
@@ -586,13 +410,13 @@ def load_BNOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="BBR_NOM_1B
 
 def load_BSNG(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="BBR_SNG_1B", 
               frame_datetime="*", production_datetime="*", frame_code="*", 
-              trim=True, i=-1, group='ScienceData', idx_nadir=15, view='NADIR'):
+              trim=True, i=-1, group='ScienceData', idx_nadir=15, view='NADIR', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                        frame_datetime, production_datetime, frame_code, 
+                        nested_directory_structure)
 
-    if not srcpath.endswith(".h5"):
-        srcpath = f"{srcpath}/{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}/" + \
-        f"{prodmod_code}_{product_code}_{frame_datetime}_{production_datetime}_{frame_code}.h5"
-
-    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
+    ds = load_EC_product(srcpath, trim=False, group=group, i=i, preprocess_for_NaT=True)
     
     if ds:
         ds = ds.sel(view=view)
@@ -605,7 +429,389 @@ def load_BSNG(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="BBR_SNG_1B
             ds = trim_to_frame(ds, latvar='selected_latitude', sel_nadir=sel_nadir)
             
     return ds
+
+############################
+##### ESA L2a products #####
+############################
+
+
+##### A-FM #####
+
+def load_AFM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_FM__2A", 
+             frame_datetime="*", production_datetime="*", frame_code="*",
+             trim=True, group='ScienceData', i=-1, nested_directory_structure=False):
     
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+##### A-PRO #####
+
+def load_AEBD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_EBD_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, group='ScienceData', i=-1, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+def load_AAER(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_AER_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, group='ScienceData', i=-1, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+    
+
+def load_AICE(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_ICE_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, group='ScienceData', i=-1, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+def load_ATC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ATL_TC__2A", 
+             frame_datetime="*", production_datetime="*", frame_code="*",
+             trim=True, group='ScienceData', i=-1, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+##### C-PRO #####
+
+def load_CFMR(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_FMR_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+def load_CCD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_CD__2A", 
+             frame_datetime="*", production_datetime="*", frame_code="*",
+             trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+def load_CTC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_TC__2A", 
+             frame_datetime="*", production_datetime="*", frame_code="*",
+             trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+##### C-CLD #####
+
+def load_CCLD(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="CPR_CLD_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+##### M-CLD #####
+
+def load_MCM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_CM__2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*", 
+              trim=True, i=-1, group='ScienceData', idx_nadir=280, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
+                         
+    sel_nadir={'across_track':idx_nadir}
+    
+    if ds is not None:
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude', isel_nadir=sel_nadir)
+        
+        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
+                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
+    
+
+def load_MCOP(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_COP_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*", 
+              trim=True, i=-1, group='ScienceData', idx_nadir=280, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
+                         
+    sel_nadir={'across_track':idx_nadir}
+
+    if ds is not None:
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude', isel_nadir=sel_nadir)
+            
+        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
+                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
+
+##### M-AOT #####
+
+def load_MAOT(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="MSI_AOT_2A", 
+              frame_datetime="*", production_datetime="*", frame_code="*", 
+              trim=True, i=-1, group='ScienceData', idx_nadir=280, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group=group, i=i)
+                         
+    sel_nadir={'across_track':idx_nadir}
+        
+    if ds is not None:
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude', sel_nadir=sel_nadir)
+        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
+                     selected_longitude=ds["longitude"].isel(sel_nadir)) 
+
+
+############################
+##### ESA L2b products #####
+############################
+
+def load_ACTC(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="AC__TC__2B", 
+              frame_datetime="*", production_datetime="*", frame_code="*", 
+              trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+def load_ACMCAP(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_CAP_2B", 
+                frame_datetime="*", production_datetime="*", frame_code="*", 
+                trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+
+def load_ACMCOM(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_COM_2B", 
+                frame_datetime="*", production_datetime="*", frame_code="*", 
+                trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i, renamer={'latitude_active':'latitude', 'longitude_active':'longitude'})
+
+def load_ACMRT(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ACM_RT__2B", 
+                frame_datetime="*", production_datetime="*", frame_code="*", 
+                trim=False, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+
+def load_ALLDF(srcpath, prodmod_code="ECA_EX[A-Z][A-Z]", product_code="ALL_DF__2B", 
+                frame_datetime="*", production_datetime="*", frame_code="*", 
+                trim=True, i=-1, group='ScienceData', nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    return load_EC_product(srcpath, trim=trim, group=group, i=i)
+    
+
+    
+
+#############################
+##### JAXA L2a products #####
+#############################
+
+def load_CCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="CPR_CLP_2A",
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1, convert_to_dB=True,
+              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
+              renamer_geogroup ={'phony_dim_6':'along_track', 'phony_dim_7':'CPR_height'}, 
+              nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
+    
+    if ds:
+        # merging in data from the Geo group (for geolocation)
+        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
+        ds = xr.merge([ds, _geo])
+        ds.encoding['source'] = _geo.encoding['source']
+        _geo.close()
+            
+        # Couldn't trim until geo group merged with data group
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude')
+    return ds
+
+
+def load_ACLA(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="ATL_CLA_2A",
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1,
+              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_5':'JSG_height', 'phony_dim_6':'along_track_footprint'},
+              renamer_geogroup ={'phony_dim_9':'along_track', 'phony_dim_10':'JSG_height', 'phony_dim_11':'along_track_footprint'}, 
+              nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+        
+    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
+    
+    if ds:
+        # merging in data from the Geo group (for geolocation)
+        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
+        ds = xr.merge([ds, _geo])
+        ds.encoding['source'] = _geo.encoding['source']
+        _geo.close()
+            
+        # Couldn't trim until geo group merged with data group
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude')
+    return ds.squeeze()
+
+
+def load_MCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="MSI_CLP_2A",
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1, idx_nadir=284,
+              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'across_track'},
+              renamer_geogroup ={'phony_dim_6':'along_track', 'phony_dim_7':'across_track'}, nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+        
+    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
+    
+    if ds:
+        # merging in data from the Geo group (for geolocation)
+        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
+        ds = xr.merge([ds, _geo])
+        ds.encoding['source'] = _geo.encoding['source']
+        _geo.close()
+            
+    sel_nadir={'across_track':idx_nadir}
+
+    if ds is not None:
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude', isel_nadir=sel_nadir)
+            
+        return ds.assign(selected_latitude=ds["latitude"].isel(sel_nadir), 
+                         selected_longitude=ds["longitude"].isel(sel_nadir)) 
+
+    
+#############################
+##### JAXA L2b products #####
+#############################
+
+def load_ACCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="AC__CLP_2B",
+              frame_datetime="*", production_datetime="*", frame_code="*",
+              trim=True, i=-1, convert_to_dB=True,
+              renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
+              renamer_geogroup ={'phony_dim_7':'along_track', 'phony_dim_8':'CPR_height'}, 
+               nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
+    
+    if ds:
+        print(ds.dims)
+        # merging in data from the Geo group (for geolocation)
+        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
+        print(_geo.dims)
+        ds = xr.merge([ds, _geo])
+        ds.encoding['source'] = _geo.encoding['source']
+        _geo.close()
+            
+        # Couldn't trim until geo group merged with data group
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude')
+    
+    return ds
+
+
+def load_ACMCLP(srcpath, prodmod_code="ECA_JX[A-Z][A-Z]", product_code="ACM_CLP_2B",
+                frame_datetime="*", production_datetime="*", frame_code="*",
+                trim=True, i=-1, convert_to_dB=True,
+                renamer_datagroup={'phony_dim_3':'along_track', 'phony_dim_4':'CPR_height'},
+                renamer_geogroup ={'phony_dim_6':'along_track', 'phony_dim_7':'CPR_height'}, 
+                nested_directory_structure=False):
+    
+    srcpath=get_srcpath(srcpath, prodmod_code, product_code, 
+                frame_datetime, production_datetime, frame_code, 
+                nested_directory_structure)
+
+        
+    ds = load_EC_product(srcpath, trim=False, group='ScienceData/Data', renamer=renamer_datagroup, i=i)
+    
+    if ds:
+        print(ds.dims)
+        # merging in data from the Geo group (for geolocation)
+        _geo = load_EC_product(srcpath, trim=False, group='ScienceData/Geo', renamer=renamer_geogroup, i=i, verbose=False)
+        print(_geo.dims)
+        ds = xr.merge([ds, _geo])
+        ds.encoding['source'] = _geo.encoding['source']
+        _geo.close()
+            
+        # Couldn't trim until geo group merged with data group
+        if trim:
+            ds = trim_to_frame(ds, latvar='latitude')
+    
+    return ds
+
+
+
+
+
+
+
 
 
 def load_ECL1(srcdir, trim=True):
@@ -632,14 +838,30 @@ def load_ECL2(srcdir, trim=True):
 
 
 def get_XMET(XMET, ds, 
-             XMET_1D_variables = ['skin_temperature', 'surface_pressure', 'snow_depth',
-                                  'eastward_wind_at_10_metres', 'northward_wind_at_10_metres'],
-             XMET_2D_variables=['temperature', 'pressure', 'relative_humidity', 'upward_air_velocity'],
-             grid_latvar='latitude', grid_lonvar='longitude', grid_altvar='height', 
+             XMET_1D_variables = ['skin_temperature', 'surface_pressure'],
+             #XMET_1D_variables = ['skin_temperature', 'temperature_at_2_metres, 
+             #                     'sea_surface_temperature', 'soil_temperature_level1', 'surface_pressure', 
+             #                     'eastward_wind_at_10_metres', 'northward_wind_at_10_metres', 
+             #                     'snow_depth', 'snow_albedo_surface', 'sea_ice_cover',
+             #                     'total_cloud_cover', 'total_column_ozone', 'total_column_water_vapour',
+             #                     'leaf_area_index_low_vegetation', 'leaf_area_index_high_vegetation', 'forecast_surface_roughness',
+             #                     'boundary_layer_height',  'tropopause_height_wmo', 'tropopause_height_calipso', 
+             #                     'near_ir_albedo_for_diffuse_radiation_surface', 'near_ir_albedo_for_direct_radiation_surface',
+             #                     'uv_visible_albedo_for_diffuse_radiation_surface', 'uv_visible_albedo_for_direct_radiation_surface'],
+             XMET_2D_variables = ['temperature', 'pressure', 'specific_humidity'],
+             #XMET_2D_variables=['temperature', 'wet_bulb_temperature, 'pressure', 'specific_humidity', 'relative_humidity', 
+             #                    'northward_wind', 'eastward_wind', 'upward_air_velocity', 
+             #                    'ozone_mass_mixing_ratio', 'divergence', 'cloud_cover', 
+             #                    'specific_cloud_ice_water_content', 'specific_cloud_liquid_water_content', 
+             #                    'specific_rain_water_content', 'specific_snow_water_content'],
+             grid_latvar='latitude', grid_lonvar='longitude', grid_altvar='height', grid_time='time', 
              grid_alongtrackdim='along_track', grid_heightdim='JSG_height',
              grid_surface_elevation='elevation', merge_inputs=True):
     """
     Adds supplementary meteorological information from X-MET, interpolated onto the grid of the dataset provided.
+
+    Note that the default lists of 1D and 2D variables are a subset of those available from the X-MET product.
+    Full lists of available variables are commented out above.
     """
     
     from scipy.interpolate import NearestNDInterpolator
@@ -670,9 +892,9 @@ def get_XMET(XMET, ds,
     print("Interpolating 2D fields...")
     XMET_profiles_unique = []
     for uihz, uiat in zip(unique_track_indices, unique_alongtrack_indices):
-        _XMET = XMET[xmet_2D_variables].isel(horizontal_grid=uihz).swap_dims({'height':'geometrical_height'}).interp(geometrical_height=ds.isel(along_track=uiat).height).drop(['horizontal_grid', 'geometrical_height'])
+        _XMET = XMET[xmet_2D_variables].isel(horizontal_grid=uihz).swap_dims({'height':'geometrical_height'}).interp(geometrical_height=ds.isel(along_track=uiat)[grid_altvar]).drop(['horizontal_grid', 'geometrical_height'])
         XMET_profiles_unique.append(_XMET)
-    XMET_interp2D = xr.concat(XMET_profiles_unique, dim='along_track').sortby('along_track').reindex_like(ds, method='bfill')#.ffill('along_track')
+    XMET_interp2D = xr.concat(XMET_profiles_unique, dim=grid_alongtrackdim).sortby(grid_alongtrackdim).reindex_like(ds, method='bfill')#.ffill('along_track')
 
     print("\t\t\t... done")
     
@@ -681,7 +903,7 @@ def get_XMET(XMET, ds,
     XMET_alongtrack[grid_alongtrackdim] = ds[grid_alongtrackdim]
     
     XMET_on_grid = XMET_alongtrack[XMET_1D_variables]  
-    for v in ['time', grid_latvar, grid_lonvar]:
+    for v in [grid_time, grid_latvar, grid_lonvar]:
         XMET_on_grid[v] = ds[v]
     
     if merge_inputs:
