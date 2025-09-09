@@ -1,0 +1,30 @@
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+
+# Tools caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage*
+
+# Envs
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Builds
+build/
+dist/
+
+# Windows ADS trash
+*:Zone.Identifier
