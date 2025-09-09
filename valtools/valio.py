@@ -5,7 +5,7 @@ Data processing module for EarthCARE analysis tools.
 
 """
 import sys
-sys.path.append('/home/akaripis/earthcare')
+sys.path.append('/home/akaripis/earthcare/valtools')
 import os
 import glob
 from datetime import datetime
@@ -14,6 +14,8 @@ import xarray as xr
 import pandas as pd
 import geopy.distance
 from scipy.ndimage import gaussian_filter1d
+from scipy.signal import savgol_filter
+
 from ectools_noa import ecio
 from local_reader import read_RV_meteor#, process_sula_profile
 import pdb
@@ -41,33 +43,6 @@ def extract_date(filename, keyword, file_type):
         return datetime.max
             
     return datetime.max
-
-def apply_gaussian_smoothing(ds, sigma=2):
-    smoothed_data = gaussian_filter1d(ds, sigma=sigma, axis=0)
-    return xr.DataArray(smoothed_data, coords=ds.coords, dims=ds.dims)
-# def apply_gaussian_smoothing(ds, sigma=5):
-#     import xarray as xr
-#     from scipy.ndimage import gaussian_filter1d
-    
-#     # Create a new dataset to store the results
-#     smoothed_ds = ds.copy()
-    
-#     # Apply smoothing to each data variable in the dataset
-#     for var_name in ds.data_vars:
-#         # Get the current DataArray
-#         da = ds[var_name]
-        
-#         # Apply Gaussian filter
-#         smoothed_data = gaussian_filter1d(da.values, sigma=sigma, axis=0)
-        
-#         # Replace the data in the copied dataset
-#         smoothed_ds[var_name].values = smoothed_data
-    
-#     return smoothed_ds
-
-from scipy.signal import savgol_filter
-
-
 
 def build_paths(root_dir, network, level):
     """
@@ -107,6 +82,7 @@ def build_paths(root_dir, network, level):
             'AEBD': os.path.join(root_dir, level, 'eca'),
             'ATC': os.path.join(root_dir, level, 'eca'),
             'ACTC': os.path.join(root_dir, level, 'eca'),
+            'MRGR': os.path.join(root_dir, level, 'eca'),
             'CFMR': os.path.join(root_dir, level, 'eca'),
             'GND': os.path.join(root_dir, level, 'gnd', gnd_suffix),
             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
@@ -131,6 +107,7 @@ def build_paths(root_dir, network, level):
             'AEBD': glob.glob(os.path.join(base_dirs['AEBD'], '*ATL_EBD*.h5')),
             'ATC': glob.glob(os.path.join(base_dirs['ATC'], '*ATL_TC__*.h5')),
             'ACTC': glob.glob(os.path.join(base_dirs['ACTC'], '*AC__TC__*')),
+            'MRGR': glob.glob(os.path.join(base_dirs['MRGR'], '*MSI_RGR_*')),
             'CFMR': glob.glob(os.path.join(base_dirs['ACTC'], '*CPR_FMR*')),
             'GND': base_dirs['GND'],
             'OUTPUT': base_dirs['OUTPUT']
@@ -138,12 +115,13 @@ def build_paths(root_dir, network, level):
         paths['AEBD'] = paths['AEBD'][0] if paths['AEBD'] else None
         paths['ATC'] = paths['ATC'][0] if paths['ATC'] else None
         paths['ACTC'] = paths['ACTC'][0] if paths['ACTC'] else None
+        paths['MRGR'] = paths['MRGR'][0] if paths['MRGR'] else None
         paths['CFMR'] = paths['CFMR'][0] if paths['CFMR'] else None
     
     return paths
 
 
-def load_ground_data(network, data_path, data_type='L1', smoothing=False):
+def load_ground_data(network, data_path, data_type='L1', scc_term ='b0355', date=None):
     """
     Load ground-based lidar data based on network type and data requirements.
     
@@ -158,18 +136,33 @@ def load_ground_data(network, data_path, data_type='L1', smoothing=False):
     --------
     tuple        | (gnd_quicklook, gnd_profile (optional), station_name, station_coordinates)
     """
-
     if network == 'EARLINET':
         if data_type == 'L1':
             # L1 processing
             gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(data_path)
         else:
             # L2 processing
-            gnd_profile_b = process_multiple_files(data_path, 'EARLINET', 'b0355')
-            #gnd_profile_e = process_multiple_files(data_path, 'EARLINET', 'e0355')
-            gnd_profile_e = None
+            if scc_term == 'elda':
+                print('elda gnd file')
+                try:
+                    gnd_profile_b = process_multiple_files(data_path, 'EARLINET', 'elda',date)
+                    gnd_profile_e = process_multiple_files(data_path, 'EARLINET', 'e0355', date)
+                except Exception:
+                    gnd_profile_b = process_multiple_files(data_path, 'EARLINET', 'elda',date)
+                    gnd_profile_e = None
+                    
+            else:
+                gnd_profile_b = process_multiple_files(data_path, 'EARLINET', 'b0355',date)
+                try:
+                    gnd_profile_e = process_multiple_files(data_path, 'EARLINET', 'e0355', date)
+                except Exception:
+                    gnd_profile_e = None
+                print('b0355')
             gnd_profile = ([gnd_profile_b, gnd_profile_e])
-            gnd_quicklook, station_name, station_coordinates = load_process_scc_L1(data_path)
+            try:
+                gnd_quicklook = load_process_scc_L1(data_path,date)
+            except Exception:
+                gnd_quicklook = None
             station_name = gnd_profile_b.attrs['location'].split(',')[0].strip()
             station_coordinates = [
                     gnd_profile_b['latitude'].values,
@@ -183,16 +176,20 @@ def load_ground_data(network, data_path, data_type='L1', smoothing=False):
             gnd_quicklook_a = process_multiple_files(data_path, 'POLLYXT', 'att_bsc')
             gnd_quicklook_b = process_multiple_files(data_path, 'POLLYXT', 'vol_depol')
             gnd_quicklook = xr.merge([gnd_quicklook_a, gnd_quicklook_b])
+            station_name, station_coordinates = get_polly_station_info(gnd_quicklook, data=True)
+
         else:
             # L2 processing
-            gnd_quicklook = process_multiple_files(data_path, 'POLLYXT', 'quasi_results')
-            # The following line needed for the quasi files to be plotted correctly
-            # else they are squeezed between 0-3km 
-            gnd_quicklook = gnd_quicklook.assign_coords(height=gnd_quicklook.height * 1)
+            try:
+                gnd_quicklook = process_multiple_files(data_path, 'POLLYXT', 'quasi_results')
+                # The following line needed for the quasi files to be plotted correctly
+                # else they are squeezed between 0-3km 
+                gnd_quicklook = gnd_quicklook.assign_coords(height=gnd_quicklook.height * 1)
+            except Exception:
+                gnd_quicklook = None            
             gnd_profile = process_multiple_files(data_path, 'POLLYXT', 'profile')
-            if smoothing:
-                gnd_profile = gnd_profile.map(apply_gaussian_smoothing)
-        station_name, station_coordinates = get_polly_station_info(gnd_quicklook, data=True)
+            station_name, station_coordinates = get_polly_station_info(gnd_profile, data=True)
+
 
     elif network == 'LICHT':
         gnd_quicklook, gnd_profile, station_coordinates, station_name = read_RV_meteor(data_path, 
@@ -303,7 +300,7 @@ def crop_polly_file(ds, crop_time, time_window=pd.Timedelta('1.5H')):
         
     return cropped_ds
         
-def process_multiple_files(folder_path, network, file_type=None):
+def process_multiple_files(folder_path, network, file_type=None, date=None):
     """
     Search for files in a folder matching a keyword, sort them by date,
     and combine into single xarray dataset.
@@ -315,6 +312,7 @@ def process_multiple_files(folder_path, network, file_type=None):
                               of the files. Only EARLINET and POLLYNET at the moment.
     file_type:             | For PollyXT files, indication to the filetype: profile, 
                               quasi, att.bsc etc and for ECVT HIRELPP, e0355, b0355
+    date:                   | Date of the file to be processed
         
     Returns
     -------
@@ -329,9 +327,9 @@ def process_multiple_files(folder_path, network, file_type=None):
         keyword ='THELISYS'
     else: 
         raise ValueError('Only EARLINET and POLLYXT networks available for processing')
-       
+    # pdb.set_trace()
     all_files = os.listdir(folder_path)
-    
+    #pdb.set_trace()
     if network == 'EARLINET':
         files = [f for f in all_files if file_type in f]
     elif network == 'POLLYXT':
@@ -341,8 +339,25 @@ def process_multiple_files(folder_path, network, file_type=None):
         files = [f for f in all_files if file_type in f]
     if not files:
         raise ValueError(f'No {network} files found in {folder_path}')
-    
-    sorted_files = sorted(files, key=lambda x: extract_date(x, keyword, file_type))
+       
+    # Apply date filter if provided
+    if date is not None:
+        date = pd.to_datetime(date)
+        date_filtered = []
+        for file in files:
+                filedate = extract_date(file, keyword, file_type)
+                # Ensure filedate is a pandas datetime
+                if not isinstance(filedate, pd.Timestamp):
+                    filedate = pd.to_datetime(filedate)
+                # Fixed the boolean logic with parentheses
+                if (filedate > date - pd.Timedelta('2H')) & (filedate < date + pd.Timedelta('2H')):
+                    date_filtered.append(file)
+        if not date_filtered:
+            raise ValueError(f'No files found within ±1.5 hours of {date}')
+    else:
+        date_filtered = files
+      
+    sorted_files = sorted(date_filtered, key=lambda x: extract_date(x, keyword, file_type))
     
     datasets = []
     for filename in sorted_files:
@@ -364,7 +379,6 @@ def process_multiple_files(folder_path, network, file_type=None):
     combined_ds = convert_ds_time(combined_ds)
     
     return combined_ds.sortby('time')
-
 
 def get_nearby_points_within_distance(latitudes, longitudes, reference_coords, 
                                     max_distance_km):
@@ -456,7 +470,7 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     tuple
         Various components depending on product type and trim options
     """
-    valid_products = ['ANOM', 'AEBD', 'ATC']
+    valid_products = ['ANOM', 'AEBD', 'ATC', 'MRGR']
     if product not in valid_products:
         raise ValueError(f'Product must be one of {valid_products}')
         
@@ -472,7 +486,8 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     elif product == 'AEBD':
         data = ecio.load_AEBD(filepath)
         data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
-
+    elif product == 'MRGR':
+        data = ecio.load_MRGR(filepath)
     else:
         data = ecio.load_ATC(filepath)
         data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
@@ -480,17 +495,31 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     product_name=(ecio.load_EC_product(filepath, group='HeaderData/VariableProductHeader/MainProductHeader', 
                                trim=False))['productName'].item()
     baseline = (product_name.split('_')[1])[2:]
-
-    distance_idx_nearest, s_dist, l_dist, s_dist_idx = get_nearby_points_within_distance(
-        data['latitude'],
-        data['longitude'],
-        station_coordinates,
-        max_distance_km=max_distance
-    )
     
+    if product == 'MRGR':
+        threshold = 1e36
+        idx = data['latitude'].sizes['across_track'] // 2
+        latitude = (data['latitude'])#.where(data['latitude'] < threshold))#.mean(dim ='across_track')
+        longitude = (data['longitude'])#.where(data['longitude'] < threshold)#.mean(dim ='across_track')
+        distance_idx_nearest, s_dist, l_dist, s_dist_idx = get_nearby_points_within_distance(
+            latitude.isel(across_track=idx),
+            longitude.isel(across_track=idx),
+            station_coordinates,
+            max_distance_km=max_distance
+        )
+    else:
+        distance_idx_nearest, s_dist, l_dist, s_dist_idx = get_nearby_points_within_distance(
+            data['latitude'],
+            data['longitude'],
+            station_coordinates,
+            max_distance_km=max_distance
+        )
+        
     cropped_data = data.isel(along_track=distance_idx_nearest[0])
     
     if product == 'ATC':
+        return data, cropped_data, baseline
+    if product == 'MRGR':
         return data, cropped_data, baseline
         
     time = cropped_data['time']
@@ -600,7 +629,6 @@ def read_scc_profile(file, time_idx):
     -------
     tuple (ds_raman, ds_klett)       | Two datasets with aligned variable names
     """
-    
     old_klett = None
     old_raman = None
     
@@ -893,7 +921,6 @@ def process_sula_profile(file, data=False):
                 (convfactor_dp355_err/convfactor_dp355)**2 + 
                 (pdr532_err[valid_indices]/pdr532[valid_indices])**2
             )
-        #pdb.set_trace()
         # Add to dataset
         ds_raman['particle_linear_depol_ratio_355nm'] = ('altitude', pdr355_raman)
         ds_raman['particle_linear_depol_ratio_355nm_error'] = ('altitude', pdr355_err)

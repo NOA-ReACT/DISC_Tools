@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -40,8 +41,7 @@ def main():
     -----------
     aebdpath (str):             | Path to ANOM data file
     atcpath (str):              | Path to simulator data file
-    sccfolderpath (str):        | Path to SCC data folder
-    pollypath (tr) :            | Path to PollyXT data foler
+    gndfolderpath (str):        | Path to ground data folder
     distdir (str):              | Output directory for plots
     resolution (str):           | Resolution of AEBD products to be plotted. 
                                     Possible values: High, med, low. 
@@ -69,6 +69,6 @@ def main():
         print(f'Error in main execution: {str(e)}')
         raise
 
-
+    
 if __name__ == '__main__':
     main()

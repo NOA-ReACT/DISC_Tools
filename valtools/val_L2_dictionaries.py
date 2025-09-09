@@ -10,6 +10,25 @@ Created on Thu Jan 23 11:06:54 2025
 #DICTIONARIES
 #############################################################################
 
+aebd_classification_color_dict = {-3: 'grey',
+                             -2: 'reddish brown',
+                             -1: 'light grey',
+                              0: 'white',
+                              1: 'pale yellow',
+                              2: 'light blue',
+                              3: 'purple',
+                              4: 'navy',
+                              5: 'deeppink'}
+
+aebd_classification_dict = {-3: 'Missing Data',
+                       -2: 'Surface',
+                       -1: 'BOTH Mie and Ray Attenuated',
+                        0: 'Clear',
+                        1: 'Liquid cloud',
+                        2: 'Ice cloud',
+                        3: 'Aerosol',
+                        4: 'Stratospheric cloud',
+                        5: 'Stratospheric aerosol'}
 
 classification_color_dict = {-3: 'pink',
                              -2: 'deeppink',

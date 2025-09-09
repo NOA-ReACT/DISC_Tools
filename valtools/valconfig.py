@@ -40,12 +40,12 @@ DEFAULT_CONFIG_L1 = {
 }
 
 DEFAULT_CONFIG_L2 = {
-    'ROOT_DIR': '/home/akaripis/earthcare/files/AUTH/20250322',
+    'ROOT_DIR': '/home/akaripis/earthcare/files/20250306',
     #'ROOT_DIR': '/home/akaripis/earthcare/files/20241007',
     'MAX_DISTANCE': 100,
-    'HMAX': [15e3,15e3,15e3],
+    'HMAX': [10e3,10e3,10e3],
     'FIG_SCALE': 'linear',
-    'NETWORK': 'THELISYS',
+    'NETWORK': 'POLLYXT',#EARLINET, #THELISYS
     'FIGSIZE': (35, 20),
     'VARIABLES': [
         'particle_backscatter_coefficient_355nm',
@@ -54,10 +54,10 @@ DEFAULT_CONFIG_L2 = {
         'particle_linear_depol_ratio_355nm'
     ],
     'RESOLUTION': 'low',
-    'DEFAULT_XLIMS': [(-1, 10.), (-20, 350), (-20, 200), (-0.1, 0.75)],
+    'DEFAULT_XLIMS': [(-1, 10.), (-20, 250), (-20, 200), (-0.1, 0.75)],
     'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-2, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
-    'SMOOTHING': 'True',
-    'COMP_TYPE': 'average', 
-    'RETRIEVAL': 'both'
+    'SMOOTHING': False,
+    'COMP_TYPE': 'profile', 
+    'RETRIEVAL': 'RAMAN' #All caps
 }

@@ -19,7 +19,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 import numpy as np
 from scipy.signal import savgol_filter
 
-
+import pdb
 from val_L2_dictionaries import*
 
 # Set the Seaborn style and font
@@ -285,7 +285,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
     
     xlabels = {
         'particle_backscatter_coefficient_355nm': ' $\mathregular{[Μm^{-1} sr^{-1}]}$',
-        'particle_extinction_coefficient_355nm': ' $\mathregular{[Μm^{-1} sr^{-1}]}$',
+        'particle_extinction_coefficient_355nm': ' $\mathregular{[Μm^{-1} ]}$',
         'lidar_ratio_355nm': '[sr]',
         'particle_linear_depol_ratio_355nm': '[-] '
     }
@@ -341,12 +341,12 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
     
     if lin_scale:
         main_line = ax.step(var, height, color=color_scheme['line'],
-                            label = labels[base_var],
-                           linewidth=color_scheme['lin_linewidth'])
+                            label = labels[base_var],where='mid',
+                            linewidth=color_scheme['lin_linewidth'])
                            
         ax.fill_betweenx(height, var - error, var + error, color=color_scheme['error'],
-                         alpha= color_scheme['alpha'])
-                         
+                          alpha= color_scheme['alpha'], step='mid')
+
         if xlim is not None:
             ax.set_xlim(xlim)
         ax.axvspan(-0.005, 0.005, color='grey', linestyle='--', linewidth=1)          
@@ -411,7 +411,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         ax.set_title(f"{title}",fontsize=14, fontweight='bold')
         
 
-def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, 
+def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None,
                     title=None, yticks=True, plot_type='classification',
                     x_offset=None, legend_number=1, xlim=False):
     """
@@ -435,6 +435,9 @@ def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None,
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 12))
     
+    if not varname == 'quality_status':
+        varname = f'{varname}_{resolution}_resolution' if resolution in ['medium', 'low'] else varname
+
     var = ds[varname][idx]
     height = ds['height'][idx]
     
@@ -491,8 +494,8 @@ def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None,
     if title:
         ax.set_title(title, fontsize=14, fontweight='bold')
         
-def plot_AEBD_cla_qs(ds, cla_variable, qs_variable, hmax, title, idx, ax=None, 
-                     yticks=False):
+def plot_AEBD_cla_qs(ds, cla_variable, qs_variable, hmax, title, idx, resolution,
+                     ax=None, yticks=False):
     """
     Plots classification profile together with quality status
     
@@ -517,11 +520,11 @@ def plot_AEBD_cla_qs(ds, cla_variable, qs_variable, hmax, title, idx, ax=None,
     else:
         ax2 = ax.twinx()
         
-    plot_AEBD_scatter(ds=ds, varname=cla_variable, hmax=hmax, ax=ax,
+    plot_AEBD_scatter(ds=ds, varname=cla_variable, hmax=hmax, ax=ax,resolution= resolution,
                      title=title, idx=idx, plot_type='classification',
                      x_offset=None, legend_number=1, yticks=yticks)
                      
-    plot_AEBD_scatter(ds=ds, varname=qs_variable, hmax=hmax, ax=ax2,
+    plot_AEBD_scatter(ds=ds, varname=qs_variable, hmax=hmax, ax=ax2,resolution= resolution,
                      title=None, idx=idx, plot_type='quality',
                      x_offset=45, legend_number=2, yticks=yticks, xlim=True)
        
@@ -726,7 +729,7 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
     
     from geopy.distance import geodesic
    
-    if idx == slice(None):
+    if idx == slice(None) or idx == None:
         ax.set_title(f'Min. distance: \n {shortest_distance:.1f} km',
                     fontsize=15, pad=8)
     else:
