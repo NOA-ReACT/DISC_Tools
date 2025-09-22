@@ -46,7 +46,7 @@ def main():
     -----------
     anompath (str):                 | Path to ANOM data file
     simpath (str):                  | Path to simulator data file
-    sccfolderpath (str):            | Path to SCC data folder
+    gndfolderpath (str):            | Path to GND data folder
     distdir (str):                  | Output directory for plots
     lin_scale (Bool):               | Whether to use linear scale for profile 
                                         plots, default: True
@@ -55,7 +55,7 @@ def main():
     """
     # Input paths
     root_dir = DEFAULT_CONFIG_L1['ROOT_DIR']
-    PATHS = build_paths(root_dir, DEFAULT_CONFIG_L1['NETWORK'],'L1')
+    PATHS = build_paths(root_dir, DEFAULT_CONFIG_L1['NETWORK'],'L1', DEFAULT_CONFIG_L1['BASELINE'])
     
     try:
         fig = plot_EC_L1_comparison(anompath=PATHS['ANOM'], simpath=PATHS['SIM'],

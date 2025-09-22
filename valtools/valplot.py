@@ -118,16 +118,17 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
         raise ValueError(f'Profile must be one of {list(colors.keys())}')
     
     color_scheme = colors[profile]
-    
     var = ds[varname].mean('along_track') * 1e6
     error =ds[f"{varname}_total_error"].mean('along_track')*1e6
 
+    # height = ds[heightvar].mean(dim='along_track')
     if profile == 'EC':
         or_height = ds[heightvar]-ds['geoid_offset']
         height = or_height.mean(dim='along_track')
         # height = ds[heightvar].mean(dim='along_track')
     else: 
         height = ds[heightvar].mean(dim='along_track')[::-1]
+
         
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 20))
@@ -309,11 +310,14 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         var = ds[varname][idx] * 1e6
         error = ds[f'{varname}_error'][idx] * 1e6
         if smoothing:
-            var = savgol_filter(var, window_length=31, polyorder=3)
+            var = savgol_filter(var, window_length=191, polyorder=3)
+            print('smoothed')
     else:
         var = ds[varname][idx]
         if smoothing:
-            var = savgol_filter(var, window_length=31, polyorder=3)
+            var = savgol_filter(var, window_length=191, polyorder=3)
+            print('smoothed')
+
         error = ds[f'{varname}_error'][idx]
 
     if profile == 'EC':

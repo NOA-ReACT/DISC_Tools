@@ -66,28 +66,31 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
 
     lin_scale = fig_scale != 'log'  # True unless fig_scale is 'log'
     log_scale = fig_scale != 'linear'  # True unless fig_scale is 'linear'
-        
     # Load GND data
     gnd_quicklook, station_name, station_coordinates = load_ground_data(network,
                                                                         gndfolderpath,'L1')
-
+    print('Loaded ground files, moving to simulator ')
     # Load simulator data - no preproccessing needed
     SIM = ecio.load_ANOM(simpath)
-    
+    SIM = SIM.isel(height=slice(None, None, -1))
+    print('Loaded simulator file, moving to EC files ')
+
     # Load and crop EC product
-    anom, anom_50km, shortest_time, baseline, distance_idx_nearest, dst_min, dist_idx, anom_100km = (
+    anom, anom_50km, shortest_time, baseline, distance_idx_nearest, dst_min, dist_idx = (
         load_crop_EC_product( anompath, station_coordinates, 'ANOM', max_distance=max_distance,
-        second_trim=True, second_distance=100)
+        second_trim=False, second_distance=100)
         )
     # Format overpass date
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     #overpass_date = '2023-09-24 14:10:20' #mock value for dummy  files.
-    pdb.set_trace()
+
     if network == 'POLLYXT' or network == 'EARLINET':
         overpass_date_g = pd.Timestamp(shortest_time.item())#.strftime('%d-%m-%Y %H:%M')
         #overpass_date = '2024-16-10 12:40:52' #mock value for dummy  files.
 
         gnd_quicklook = crop_polly_file(gnd_quicklook, overpass_date_g)
+        
+    print('File Loading successful')
 
     # Initialize the figure
     fig = plt.figure(figsize=figsize)
@@ -447,7 +450,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     else:
         idx = idx
     # Plot ground data if available
-    
+    # gnd_profilesf = truncate_at_deviation(aebd_profiles, gnd_profiles, variables)
     for i, (variable, ax, title) in enumerate(zip(variables, axes, titles)):
         if variable in gnd_profiles:
             plot_AEBD_profiles(gnd_profiles, variable, ax=ax, lin_scale=lin_scale,

@@ -5,7 +5,7 @@ Data processing module for EarthCARE analysis tools.
 
 """
 import sys
-sys.path.append('/home/akaripis/earthcare/valtools')
+sys.path.append('/home/akaripis/earthcare/valtools/')
 import os
 import glob
 from datetime import datetime
@@ -16,7 +16,7 @@ import geopy.distance
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 
-from ectools_noa import ecio
+from ectools.ectools_bit import ecio
 from local_reader import read_RV_meteor#, process_sula_profile
 import pdb
 
@@ -44,15 +44,112 @@ def extract_date(filename, keyword, file_type):
             
     return datetime.max
 
-def build_paths(root_dir, network, level):
+# def build_paths(root_dir, network, level):
+#     """
+#     Build paths dictionary from root directory and create directories if they don't exist
+    
+#     Parameters
+#     ----------
+#     root_dir : str  | Root directory containing the L1 and L2 structure
+#     level: str      | Level of data process to search for the equivalent folder: 
+#                      either L1 or L2
+        
+#     Returns
+#     -------
+#     dict
+#         Dictionary with paths for AEBD, ATC, SCC, POLLY, and OUTPUT
+#     """
+#     # Ensure root_dir exists
+#     if not os.path.exists(root_dir):
+#         raise ValueError(f"Root directory does not exist: {root_dir}")
+#     if network == 'EARLINET' or network == 'THELISYS':
+#         gnd_suffix ='scc'
+#     elif network == 'POLLYXT':
+#         gnd_suffix = 'tropos'
+#     elif network == 'LICHT':
+#         gnd_suffix = 'licht'
+    
+#     # First create the base directories
+#     if level =='L1':
+#         base_dirs = {
+#             'ANOM': os.path.join(root_dir, level, 'eca'),
+#             'SIM': os.path.join(root_dir, level, 'sim'),
+#             'GND': os.path.join(root_dir, level, 'gnd', gnd_suffix),
+#             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
+#         }
+#     elif level == 'L2':      
+#         base_dirs = {
+#             'AEBD': os.path.join(root_dir, level, 'eca'),
+#             'ATC': os.path.join(root_dir, level, 'eca'),
+#             'ACTC': os.path.join(root_dir, level, 'eca'),
+#             'MRGR': os.path.join(root_dir, level, 'eca'),
+#             'CFMR': os.path.join(root_dir, level, 'eca'),
+#             'GND': os.path.join(root_dir, level, 'gnd', gnd_suffix),
+#             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
+#         }
+    
+#     # Create all base directories
+#     for key, path in base_dirs.items():
+#         os.makedirs(path, exist_ok=True)
+    
+#     # Now find files and build the final paths dictionary
+#     if level =='L1':
+#         paths = {
+#             'ANOM': glob.glob(os.path.join(base_dirs['ANOM'], '*ATL_NOM*.h5')),
+#             'SIM': glob.glob(os.path.join(base_dirs['SIM'], '*ATL_NOM*.h5')),
+#             'GND': base_dirs['GND'],
+#             'OUTPUT': base_dirs['OUTPUT']
+#         }
+#         paths['ANOM'] = paths['ANOM'][0] if paths['ANOM'] else None
+#         paths['SIM'] = paths['SIM'][0] if paths['SIM'] else None
+#     elif level == 'L2':      
+#         paths = {
+#             'AEBD': glob.glob(os.path.join(base_dirs['AEBD'], '*ATL_EBD*.h5')),
+#             'ATC': glob.glob(os.path.join(base_dirs['ATC'], '*ATL_TC__*.h5')),
+#             'ACTC': glob.glob(os.path.join(base_dirs['ACTC'], '*AC__TC__*')),
+#             'MRGR': glob.glob(os.path.join(base_dirs['MRGR'], '*MSI_RGR_*')),
+#             'CFMR': glob.glob(os.path.join(base_dirs['ACTC'], '*CPR_FMR*')),
+#             'GND': base_dirs['GND'],
+#             'OUTPUT': base_dirs['OUTPUT']
+#         }
+#         paths['AEBD'] = paths['AEBD'][0] if paths['AEBD'] else None
+#         paths['ATC'] = paths['ATC'][0] if paths['ATC'] else None
+#         paths['ACTC'] = paths['ACTC'][0] if paths['ACTC'] else None
+#         paths['MRGR'] = paths['MRGR'][0] if paths['MRGR'] else None
+#         paths['CFMR'] = paths['CFMR'][0] if paths['CFMR'] else None
+    
+#     return paths
+
+    
+def filter_files_by_baseline(file_list, baseline):
+    """Filter files based on baseline criteria"""
+    if not baseline or not file_list:
+        return file_list[0] if file_list else None
+    
+    if baseline.endswith('*'):
+        # Wildcard matching (e.g., 'A*' matches 'AA', 'AB', 'AC', etc.)
+        prefix = baseline[:-1]
+        filtered_files = [f for f in file_list if f'EX{prefix}' in os.path.basename(f)]
+    else:
+        # Exact baseline matching (e.g., 'AE' matches 'EXAE')
+        filtered_files = [f for f in file_list if f'EX{baseline}' in os.path.basename(f)]
+    
+    return filtered_files[0] if filtered_files else None
+    
+def build_paths(root_dir, network, level, baseline=None):
     """
     Build paths dictionary from root directory and create directories if they don't exist
     
     Parameters
     ----------
-    root_dir : str  | Root directory containing the L1 and L2 structure
-    level: str      | Level of data process to search for the equivalent folder: 
-                     either L1 or L2
+    root_dir : str      | Root directory containing the L1 and L2 structure
+    network : str       | Network type (EARLINET, THELISYS, POLLYXT, LICHT)
+    level: str          | Level of data process to search for the equivalent folder: 
+                         either L1 or L2
+    baseline: str       | Baseline filter (e.g., 'AE', 'BA', 'A*', 'B*', None)
+                         If None, returns first file found (original behavior)
+                         If specific (e.g., 'AE'), filters for files containing 'EXAE'
+                         If wildcard (e.g., 'A*'), filters for all baselines starting with 'A'
         
     Returns
     -------
@@ -62,15 +159,16 @@ def build_paths(root_dir, network, level):
     # Ensure root_dir exists
     if not os.path.exists(root_dir):
         raise ValueError(f"Root directory does not exist: {root_dir}")
+    
     if network == 'EARLINET' or network == 'THELISYS':
-        gnd_suffix ='scc'
+        gnd_suffix = 'scc'
     elif network == 'POLLYXT':
         gnd_suffix = 'tropos'
     elif network == 'LICHT':
         gnd_suffix = 'licht'
-    
+
     # First create the base directories
-    if level =='L1':
+    if level == 'L1':
         base_dirs = {
             'ANOM': os.path.join(root_dir, level, 'eca'),
             'SIM': os.path.join(root_dir, level, 'sim'),
@@ -93,33 +191,35 @@ def build_paths(root_dir, network, level):
         os.makedirs(path, exist_ok=True)
     
     # Now find files and build the final paths dictionary
-    if level =='L1':
+    if level == 'L1':
+        anom_files = glob.glob(os.path.join(base_dirs['ANOM'], '*ATL_NOM*.h5'))
+        sim_files = glob.glob(os.path.join(base_dirs['SIM'], '*ATL_NOM*.h5'))
+        
         paths = {
-            'ANOM': glob.glob(os.path.join(base_dirs['ANOM'], '*ATL_NOM*.h5')),
-            'SIM': glob.glob(os.path.join(base_dirs['SIM'], '*ATL_NOM*.h5')),
+            'ANOM': filter_files_by_baseline(anom_files, baseline),
+            'SIM': sim_files[0] if sim_files else None,
             'GND': base_dirs['GND'],
             'OUTPUT': base_dirs['OUTPUT']
         }
-        paths['ANOM'] = paths['ANOM'][0] if paths['ANOM'] else None
-        paths['SIM'] = paths['SIM'][0] if paths['SIM'] else None
-    elif level == 'L2':      
+        
+    elif level == 'L2':
+        aebd_files = glob.glob(os.path.join(base_dirs['AEBD'], '*ATL_EBD*.h5'))
+        atc_files = glob.glob(os.path.join(base_dirs['ATC'], '*ATL_TC__*.h5'))
+        actc_files = glob.glob(os.path.join(base_dirs['ACTC'], '*AC__TC__*'))
+        mrgr_files = glob.glob(os.path.join(base_dirs['MRGR'], '*MSI_RGR_*'))
+        cfmr_files = glob.glob(os.path.join(base_dirs['CFMR'], '*CPR_FMR*'))
+        
         paths = {
-            'AEBD': glob.glob(os.path.join(base_dirs['AEBD'], '*ATL_EBD*.h5')),
-            'ATC': glob.glob(os.path.join(base_dirs['ATC'], '*ATL_TC__*.h5')),
-            'ACTC': glob.glob(os.path.join(base_dirs['ACTC'], '*AC__TC__*')),
-            'MRGR': glob.glob(os.path.join(base_dirs['MRGR'], '*MSI_RGR_*')),
-            'CFMR': glob.glob(os.path.join(base_dirs['ACTC'], '*CPR_FMR*')),
+            'AEBD': filter_files_by_baseline(aebd_files, baseline),
+            'ATC': filter_files_by_baseline(atc_files, baseline),
+            'ACTC': filter_files_by_baseline(actc_files, baseline),
+            'MRGR': filter_files_by_baseline(mrgr_files, baseline),
+            'CFMR': filter_files_by_baseline(cfmr_files, baseline),
             'GND': base_dirs['GND'],
             'OUTPUT': base_dirs['OUTPUT']
         }
-        paths['AEBD'] = paths['AEBD'][0] if paths['AEBD'] else None
-        paths['ATC'] = paths['ATC'][0] if paths['ATC'] else None
-        paths['ACTC'] = paths['ACTC'][0] if paths['ACTC'] else None
-        paths['MRGR'] = paths['MRGR'][0] if paths['MRGR'] else None
-        paths['CFMR'] = paths['CFMR'][0] if paths['CFMR'] else None
     
     return paths
-
 
 def load_ground_data(network, data_path, data_type='L1', scc_term ='b0355', date=None):
     """
@@ -197,7 +297,10 @@ def load_ground_data(network, data_path, data_type='L1', scc_term ='b0355', date
     elif network == 'THELISYS':
         gnd_profile, station_coordinates, station_name = read_sula_file(data_path)
         #gnd_quicklook = None
-        gnd_quicklook, station_name1, station_coordinates1 = load_process_scc_L1(data_path)
+        try:
+            gnd_quicklook, station_name1, station_coordinates1 = load_process_scc_L1(data_path)
+        except Exception:
+            gnd_quicklook = None   
     else:
         raise ValueError(f"Unsupported network: {network}. Must be either 'EARLINET' or 'POLLYXT'")
     
@@ -721,7 +824,7 @@ def read_scc_profile(file, time_idx):
     # Return the datasets
     return ds_raman, ds_klett
 def cut_gnd_noise(sat_ds, gnd_ds, variables, heightvar_EC='height', 
-                  heightvar_gnd='height', step=50, threshold=200):
+                  heightvar_gnd='height', step=900, threshold=80):
     """
     Function to cut noisy ground data. For a range of every 50km checks the average 
     between the datasets and if their difference is above a threshold, it fills with nan 
@@ -935,3 +1038,77 @@ def process_sula_profile(file, data=False):
     
     return ds_raman, ds_klett
 
+def truncate_at_deviation(sat_ds, gnd_ds, variables, heightvar_EC='JSG_height', 
+                         heightvar_gnd='height', threshold=80, window_size=2):
+    """
+    Truncate ground profile when moving average of deviations exceeds threshold.
+    
+    Parameters
+    ----------
+    sat_ds, gnd_ds : xarray.Dataset
+        Satellite and ground datasets
+    variables : str or list of str
+        Variable name(s) to process
+    heightvar_EC, heightvar_gnd : str
+        Height coordinate names
+    threshold : float
+        Maximum allowed percentage difference. Default is 200.
+    window_size : int
+        Number of points to average for moving window. Default is 3.
+        
+    Returns
+    -------
+    xarray.Dataset
+        Ground dataset truncated at deviation point
+    """
+    import numpy as np
+    
+    if isinstance(variables, str):
+        variables = [variables]
+    
+    truncated_gnd = gnd_ds.copy(deep=True)
+    
+    for var in variables:
+        # Get height coordinates
+        gnd_heights = gnd_ds[heightvar_gnd].values
+        sat_heights = sat_ds[heightvar_EC].values
+        
+        # Calculate percentage differences for each height
+        pct_diffs = []
+        valid_heights = []
+        
+        for height in gnd_heights:
+            # Find closest satellite point
+            sat_idx = np.argmin(np.abs(sat_heights - height))
+            gnd_idx = np.argmin(np.abs(gnd_heights - height))
+            
+            sat_val = float(sat_ds[var].isel({heightvar_EC: sat_idx}))
+            gnd_val = float(gnd_ds[var].isel({heightvar_gnd: gnd_idx}))
+            
+            # Calculate percentage difference if both values are valid
+            if not (np.isnan(sat_val) or np.isnan(gnd_val)) and abs(sat_val) > 1e-10:
+                pct_diff = abs((gnd_val - sat_val) / sat_val * 100)
+                pct_diffs.append(pct_diff)
+                valid_heights.append(height)
+        
+        # Apply moving average to find cutoff point
+        cutoff_height = None
+        
+        if len(pct_diffs) >= window_size:
+            for i in range(window_size - 1, len(pct_diffs)):
+                # Calculate moving average of last window_size points
+                window_avg = np.mean(pct_diffs[i - window_size + 1:i + 1])
+                
+                if window_avg > threshold:
+                    cutoff_height = valid_heights[i - window_size + 1]  # Cut at start of bad window
+                    print(f"Variable {var}: Cutting at {cutoff_height:.1f}km (moving avg: {window_avg:.1f}%)")
+                    break
+        
+        # Truncate at cutoff height
+        if cutoff_height is not None:
+            truncated_gnd[var] = truncated_gnd[var].where(
+                truncated_gnd[heightvar_gnd] <= cutoff_height, np.nan)
+        else:
+            print(f"Variable {var}: No truncation needed (profile quality OK)")
+    
+    return truncated_gnd

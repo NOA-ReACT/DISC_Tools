@@ -31,7 +31,6 @@ from matplotlib.colors import LogNorm, Normalize, ListedColormap, LinearSegmente
 from matplotlib.ticker import MultipleLocator
 
 from . import colormaps 
-
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -59,7 +58,13 @@ def format_across_track(ax, label='across-track\npixel [-]'):
     ticks_y = ticker.FuncFormatter(lambda x, pos: '${0:g}$'.format(x))
     ax.yaxis.set_major_formatter(ticks_y)
     ax.set_ylabel(label) 
-
+    
+def format_across_track_vertical(ax, label='across-track\npixel [-]'):
+    import matplotlib.ticker as ticker
+    ticks_x = ticker.FuncFormatter(lambda x, pos: '${0:g}$'.format(x))
+    ax.xaxis.set_major_formatter(ticks_x)  # Changed from yaxis to xaxis
+    ax.set_xlabel(label)  # Changed from set_ylabel to set_xlabel
+    
 def format_latitude(ax, axis='x'):
     import matplotlib.ticker as ticker
     latFormatter = ticker.FuncFormatter(lambda x, pos: "${:g}^\circ$S".format(-1*x) if x < 0 else "${:g}^\circ$N".format(x))
@@ -213,8 +218,8 @@ ATC_category_colors = [sns.xkcd_rgb['silver'],      #missing data
                        sns.xkcd_rgb['neon green'],     # PSC Ia
                        sns.xkcd_rgb['greenish cyan'],     # PSC Ib
                        sns.xkcd_rgb['pinkish grey'],     # stratospheric aerosol 1 (ash)
-                       sns.xkcd_rgb['light khaki'],     # stratospheric aerosol 2 (sulphate)
-                       sns.xkcd_rgb['light grey'],     # stratospheric aerosol 3 (smoke)]
+                       sns.xkcd_rgb['copper'],     # stratospheric aerosol 2 (sulphate)
+                       sns.xkcd_rgb['dark grey'],     # stratospheric aerosol 3 (smoke)]
                        '0.9', #'101: Unknown: Aerosol Target has a very low probability (no class assigned)',
                        '0.9', #'102: Unknown: Aerosol classification outside of param space',
                        '0.9', #'104: Unknown: Strat. Aerosol Target has a very low probability (no class assigned)',
@@ -290,7 +295,38 @@ MCM_qstat_category_colors = [sns.xkcd_rgb['green'],
                              sns.xkcd_rgb['orange']]
     
     
-def add_nadir_track(ax, idx_across_track=284, dark_mode=False, label_below=True, label_offset=1, zorder=11):
+# def add_nadir_track(ax, idx_across_track=284, dark_mode=False, label_below=True, label_offset=1, zorder=11, orientation =None):
+#     if dark_mode:
+#         text_color = 'w'
+#         text_shading= 'k'
+#         shading_alpha = 0.5
+#         shading_lw = 5
+#     else:
+#         text_color = 'k'
+#         text_shading = 'w'
+#         shading_alpha = 0.5
+#         shading_lw = 5
+    
+
+#         _x0, _x1 = ax.get_xlim()
+#         ax.plot([_x0, _x1], [idx_across_track, idx_across_track], 
+#                 color=text_shading, lw=4, ls='-', alpha=0.33, zorder=zorder)
+#         ax.plot([_x0, _x1], [idx_across_track, idx_across_track], 
+#                 color=text_color, lw=1.5, ls='--', zorder=zorder+1)
+        
+#     if label_below:
+#         shade_around_text(ax.text(_x0, idx_across_track+label_offset, " nadir", ha='left', va='top', color=text_color, fontsize='xx-small'), 
+#                             lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+#         shade_around_text(ax.text(_x1, idx_across_track+label_offset, "nadir ", ha='right', va='top', color=text_color, fontsize='xx-small'), 
+#                             lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+#     else:
+#         shade_around_text(ax.text(_x0, idx_across_track-label_offset, " nadir", ha='left', va='bottom', color=text_color, fontsize='xx-small'), 
+#                             lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+#         shade_around_text(ax.text(_x1, idx_across_track-label_offset, "nadir ", ha='right', va='bottom', color=text_color, fontsize='xx-small'), 
+#                             lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+
+def add_nadir_track(ax, idx_across_track=284, dark_mode=False, label_below=True, 
+                   label_offset=1, zorder=11, orientation=None):
     if dark_mode:
         text_color = 'w'
         text_shading= 'k'
@@ -302,23 +338,47 @@ def add_nadir_track(ax, idx_across_track=284, dark_mode=False, label_below=True,
         shading_alpha = 0.5
         shading_lw = 5
     
-    _x0, _x1 = ax.get_xlim()
-    ax.plot([_x0, _x1], [idx_across_track, idx_across_track], 
-            color=text_shading, lw=4, ls='-', alpha=0.33, zorder=zorder)
-    ax.plot([_x0, _x1], [idx_across_track, idx_across_track], 
-            color=text_color, lw=1.5, ls='--', zorder=zorder+1)
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
     
-    if label_below:
-        shade_around_text(ax.text(_x0, idx_across_track+label_offset, " nadir", ha='left', va='top', color=text_color, fontsize='xx-small'), 
-                            lw=shading_lw, alpha=shading_alpha, fg=text_shading)
-        shade_around_text(ax.text(_x1, idx_across_track+label_offset, "nadir ", ha='right', va='top', color=text_color, fontsize='xx-small'), 
-                            lw=shading_lw, alpha=shading_alpha, fg=text_shading)
-    else:
-        shade_around_text(ax.text(_x0, idx_across_track-label_offset, " nadir", ha='left', va='bottom', color=text_color, fontsize='xx-small'), 
-                            lw=shading_lw, alpha=shading_alpha, fg=text_shading)
-        shade_around_text(ax.text(_x1, idx_across_track-label_offset, "nadir ", ha='right', va='bottom', color=text_color, fontsize='xx-small'), 
-                            lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+    if orientation :  # Normal case
 
+        # Vertical line at fixed x-coordinate
+        ax.plot([idx_across_track, idx_across_track], [y0, y1], 
+                color=text_shading, lw=4, ls='-', alpha=0.33, zorder=zorder)
+        ax.plot([idx_across_track, idx_across_track], [y0, y1], 
+                color=text_color, lw=1.5, ls='--', zorder=zorder+1)
+        
+        # Text positioning for vertical line
+        if label_below:  # "below" means to the left for vertical lines
+            x_text = idx_across_track - label_offset
+            ha = 'right'
+        else:
+            x_text = idx_across_track + label_offset
+            ha = 'left'
+            
+        shade_around_text(ax.text(x_text, y0, " nadir", ha=ha, va='bottom', 
+                                 color=text_color, fontsize='xx-small', rotation=90), 
+                         lw=shading_lw, alpha=shading_alpha, fg=text_shading)
+
+    else:  # Swapped axes case
+        # Horizontal line at fixed y-coordinate
+        ax.plot([x0, x1], [idx_across_track, idx_across_track], 
+                color=text_shading, lw=4, ls='-', alpha=0.33, zorder=zorder)
+        ax.plot([x0, x1], [idx_across_track, idx_across_track], 
+                color=text_color, lw=1.5, ls='--', zorder=zorder+1)
+        
+        # Text positioning for horizontal line
+        if label_below:
+            y_text = idx_across_track + label_offset
+            va = 'top'
+        else:
+            y_text = idx_across_track - label_offset
+            va = 'bottom'
+            
+        shade_around_text(ax.text(x0, y_text, " nadir", ha='left', va=va, 
+                                 color=text_color, fontsize='xx-small'), 
+                         lw=shading_lw, alpha=shading_alpha, fg=text_shading)
 def linesplit(s, line_break):
     if ((len(s) <= line_break) | (len(s) <= line_break+0.25*line_break)):
         return [s]
@@ -517,7 +577,16 @@ def plot_EC_target_classification(ax, ds, varname, category_colors,
     # Handle colorbar visibility
     if not show_colorbar:
         _cb.remove()
-
+    # Add vertical line if station value is provided
+    if station is not None:
+        try:
+            ax.axvline(x=station, color='black', linestyle='--', linewidth=1.5)
+            # print(f"Plotted vertical line at time corresponding to station: {station}")
+        except KeyError:
+            print(f"Could not find corresponding time for station={
+                  station}. Check the dataset and coordinates.")
+        except Exception as e:
+            print(f"An error occurred while plotting the vertical line: {e}")
     # Format plot with enhanced parameters
     if comparison:
         format_plot(ax, ds, title, hmax, hmin=hmin, heightvar=heightvar,
@@ -547,13 +616,41 @@ AAER_aerosol_classes = [10,11,12,13,14,15]
 CCLD_ice_classes = [7,8,9,13,15,17]
 CCLD_rain_classes = [3,4,5,12,14,16]
 
-
 def format_plot(ax, ds, title, hmax, dark_mode=False,
                 heightvar='height', timevar='time', latvar='latitude', lonvar='longitude',
                 across_track=True, dim_name='along_track', use_localtime=False,
                 plot_position='both', comparison=False, scc=False, yticks=True, xticks=True,
                 hmin=-0.5e3, use_latlon=True, short_timestep=False):
-
+    # Handle case where ds is None
+    if ds is None:
+        # Set basic formatting without data-dependent operations
+        ax.set_ylim(0, hmax)
+        if title is not None:
+            if comparison:
+                if plot_position == 'bottom':
+                    ax.set_title(title, fontsize=16, y=1.07)
+                elif plot_position == 'top':
+                    ax.set_title(title, fontsize=16, y=1.31)
+                else:
+                    ax.set_title(title, fontsize=16)
+            else:
+                ax.set_title(title, fontsize=16, y=1.20)
+        
+        # Handle ticks without data
+        if yticks:
+            if hmax > 1e3:
+                format_height(ax, scale=1e3)
+                ax.tick_params(axis='y', labelsize=14, length=6)
+            else:
+                format_height(ax, scale=1)
+                ax.tick_params(axis='y', labelsize=14)
+        else:
+            ax.set_ylabel('')
+            ax.yaxis.set_ticklabels([])
+        
+        # Remove x-axis ticks and labels since there's no time data
+        ax.tick_params(bottom=False, labelbottom=False)
+        return
     # Get figure and renderer for font size calculations
     fig = ax.figure
     renderer = fig.canvas.get_renderer()
@@ -582,9 +679,9 @@ def format_plot(ax, ds, title, hmax, dark_mode=False,
         title_artist.remove()
         if comparison:
             if plot_position != 'both':
-                ax.set_title(title, fontsize=fontsize, y=1.32)
+                ax.set_title(title, fontsize=fontsize, y=1.12)
                 if plot_position == 'top':
-                    ax.set_title(title, fontsize=fontsize, y=1.31)
+                    ax.set_title(title, fontsize=fontsize, y=1.33)
                 elif plot_position == 'middle':
                     ax.set_title(title, fontsize=fontsize, y=1.07)
                 elif plot_position == 'bottom':
@@ -723,8 +820,7 @@ def format_plot(ax, ds, title, hmax, dark_mode=False,
         shade_around_text(ax.text(0.9975, 0.98, product_code, ha='right', va='top',
                                   fontsize=fontsize, color=text_color, transform=ax.transAxes),
                           lw=shading_lw, alpha=shading_alpha, fg=text_shading)
-
-
+ 
 def plot_EC_2D(ax, ds, varname, label,
                plot_where=True, scale_factor=1,
                hmax=15e3, plot_scale=None, plot_range=None, cmap=None,
@@ -838,7 +934,24 @@ def plot_gnd_2D(ax, ds, varname, label, heightvar,
     sns.set_context('poster')
 
     import pandas as pd
-
+    # Handle case where ds is None (no ground quicklook data)
+    if ds is None:
+        # Set up the axes with proper formatting but no data
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, hmax)
+        
+        # Add "no ground quicklook" text in the center
+        ax.text(0.5, 0.5, 'No Ground Quicklook\nData Available', 
+                ha='center', va='center', transform=ax.transAxes,
+                fontsize=16, fontweight='bold', color='red',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
+        
+        # Still apply formatting for consistent appearance
+        format_plot(ax, None, title, hmax, dark_mode=dark_mode, timevar=timevar, heightvar=heightvar,
+                    latvar=latvar, lonvar=lonvar, across_track=across_track, use_localtime=use_localtime, 
+                    plot_position=plot_position, comparison=comparison, scc=scc, yticks=yticks, xticks=xticks)
+        
+        return  # Exit
     if plot_scale is None:
         plot_scale = ds[varname].attrs['plot_scale']
 
@@ -1040,10 +1153,13 @@ def add_relative_humidity(ax, ds):
     return _cl
 
 
-def add_land_sea_border(ax, ds, col='black', zorder=10):
+def add_land_sea_border(ax, ds, col='black', zorder=10, orientation=None):
     
-    _x, _y, _lm = xr.broadcast(ds.time, ds.across_track, ds.land_flag)
-    
+    if orientation:
+        _y, _x, _lm = xr.broadcast(ds.time, ds.across_track, ds.land_flag)
+    else:
+        _x, _y, _lm = xr.broadcast(ds.time, ds.across_track, ds.land_flag)
+
     contour_levels = [0,0.5,1]
     _cn = ax.contour(_x, _y, _lm, 
                      levels=contour_levels, colors=col,   
@@ -2436,6 +2552,29 @@ def plot_RGB_MRGR(ax, RGB, MRGR, select=slice(None), use_localtime=True, short_t
                short_timestep=short_timestep)
     ax.set_ylim(len(MRGR.across_track)-15, 12)
 
+def plot_RGB_MRGR_vertical_minus90(ax, RGB, MRGR, select=slice(None), title='M-RGR SWIR-NIR-VIS  \nnatural colour image'):
+    RGB = RGB.isel(along_track=select).swap_dims({'along_track': 'time'})
+    
+    # For -90° rotation: swap axes AND invert the y-axis direction
+    RGB.plot.imshow(
+        ax=ax, x='across_track', y='time', rgb='band',  # Swapped from original
+        yincrease=False)  # Changed to True for -90°
+    ax.invert_xaxis()
+    # Simple axis formatting
+    ax.set_xlabel('Across-track pixel', fontsize=12)
+    ax.set_ylabel('Time (UTC)', fontsize=15, labelpad=3)
+    # Y-axis: 4 evenly spaced time ticks with -90° rotation
+    time_values = MRGR.time.values
+    tick_indices = np.linspace(0, len(time_values) - 1, 4, dtype=int)
+    time_ticks = time_values[tick_indices]
+    ax.set_yticks(time_ticks)
+    ax.set_yticklabels([f"{pd.to_datetime(t):%H:%M:%S}" for t in time_ticks], 
+                       rotation=0, va='center', fontsize=12)
+    
+    ax.yaxis.set_label_coords(-0.3, 0.43)
+    ax.set_title(title, fontsize=18, y=1.03)
+    # X-axis formatting
+    ax.tick_params(axis='x', labelsize=12)
     
 def plot_TIR_MRGR(ax, MRGR, select=slice(None), use_localtime=True, tmin=190, tmax=320, cmap='LW', short_timestep=False):
     _MRGR = MRGR.isel(along_track=select).swap_dims({'along_track':'time'})
@@ -2450,16 +2589,49 @@ def plot_TIR_MRGR(ax, MRGR, select=slice(None), use_localtime=True, tmin=190, tm
     cb.set_ticks([190,230,270,310])
     cb.ax.invert_yaxis()
 
+def plot_TIR_MRGR_vertical_minus90(ax, MRGR, select=slice(None), title = 'M-RGR thermal infrared'):
+    MRGR = MRGR.isel(along_track=select).swap_dims({'along_track': 'time'})
+
+    # For -90° rotation: swap axes AND invert the y-axis direction
+    cm = MRGR.TIR1.where(MRGR.TIR1 < 1e36).plot.imshow(
+        ax=ax, x='across_track', y='time',  # Swapped from original
+        cmap='SW', norm=Normalize(190, 320), 
+        add_colorbar=False, yincrease=True)  # Changed to True for -90°
+    # Simple axis formatting
+    ax.set_xlabel('Across-track pixel',fontsize=12)
+    ax.set_ylabel('Time (UTC)',fontsize=15, labelpad =3)
+    ax.yaxis.set_label_coords(-0.3, 0.43)
+    ax.set_title(title, fontsize=18,y=1.03)
     
-def format_MRGR(ax, MRGR):
+    # Y-axis: 4 evenly spaced time ticks with -90° rotation
+    time_values = MRGR.time.values
+    tick_indices = np.linspace(0, len(time_values) - 1, 4, dtype=int)
+    time_ticks = time_values[tick_indices]
+    
+    ax.set_yticks(time_ticks)
+    ax.set_yticklabels([f"{pd.to_datetime(t):%H:%M:%S}" for t in time_ticks], 
+                       rotation=0, va='center', fontsize=12)
+    
+    # X-axis formatting
+    ax.tick_params(axis='x', labelsize=12)
+    cbar = add_colorbar(ax, cm, r"BT$_{8.5\mu\mathrm{m}}$ [K]", horz_buffer=0.08, width_ratio='10%')# shrink=0.5)
+    cbar.set_ticks([190, 230, 270, 310])  
+    cbar.ax.tick_params(labelsize=13)  
+    cbar.ax.tick_params(labelsize=13) 
+    cbar.ax.invert_yaxis()
+    return None
+
+
+def format_MRGR(ax, MRGR, orientation=None):
     dx           = 1000
     d0           = 200
     x0           = 200
     ruler_y0     = 0.75
     lmcol        = 'khaki'
     
-    add_land_sea_border(ax, MRGR, col=lmcol)
-    add_nadir_track(ax, label_below=False)
+    add_land_sea_border(ax, MRGR, col=lmcol, orientation=orientation)
+    add_nadir_track(ax, label_below=False, orientation=orientation)
+
 
 
 def quicklook_MRGR(MRGR, select=slice(None,None), dh=3, hspace=2.5, use_localtime=True, with_marble=False):
@@ -2694,7 +2866,6 @@ def plot_MCM_example(MCM, MRGR=None, use_localtime=True):
     return fig, axes
 ### end ---
 
-
 def format_latlon_ticks(ax, _ax, ds, timevar, lonvar, latvar, dim_name, comparison=False):
     
     #Trim to frame
@@ -2734,8 +2905,7 @@ def format_latlon_ticks(ax, _ax, ds, timevar, lonvar, latvar, dim_name, comparis
     _ax.set_xlim(ds[timevar][0], ds[timevar][-1])
 
 
-def format_time_ticks(
-        ax, ds, timevar, lonvar, dim_name,
+def format_time_ticks(ax, ds, timevar, lonvar, dim_name,
         major_step='60s', minor_step='15s',
         use_localtime=True, comparison=False, scc=False):
 
@@ -4223,7 +4393,7 @@ def quicklook_AICE(AICE, hmax=20e3, dstdir=None, with_marble=False, show_tempera
 
 def quicklook_ATC(ATC, hmax=20e3, resolution='high', dstdir=None, axes=None, 
                   comparison=False, station=None, with_marble=False, 
-                  show_temperature=False, with_hatching=True, timevar='time'):
+                  show_temperature=True, with_hatching=True, timevar='time'):
  
     # Handle resolution suffix
     if 'med' in resolution:
@@ -4251,7 +4421,7 @@ def quicklook_ATC(ATC, hmax=20e3, resolution='high', dstdir=None, axes=None,
         plot_EC_target_classification(
             ax, ATC, 'classification' + suffix,
             ATC_category_colors, hmax=hmax, 
-            title='ATL-TC Target Classification',
+            title=f'ATL-TC Target Classification - {resolution} res.',
             plot_position='bottom', station=station,
             comparison=comparison, label_fontsize=10, 
             yticks=True, xticks=True
@@ -4266,53 +4436,53 @@ def quicklook_ATC(ATC, hmax=20e3, resolution='high', dstdir=None, axes=None,
     
     # Add hatching patterns (from Git version)
     if with_hatching:
-        ATC_aerosol_classes = [10, 11, 12, 13, 14, 15, 25, 26, 27]
-        ATC_no_data_classes = [-2, -1]
-        ATC_unknown_classes = [101, 102, 103, 104, 105, 106, 107]
+        # ATC_aerosol_classes = [10, 11, 12, 13, 14, 15, 25, 26, 27]
+        # ATC_no_data_classes = [-2, -1]
+        # ATC_unknown_classes = [101, 102, 103, 104, 105, 106, 107]
         
-        _x, _y, is_aerosol, is_no_data, is_unknown = xr.broadcast(
-            ATC[timevar], ATC.height, 
-            ATC['classification' + suffix].isin(ATC_aerosol_classes),
-            ATC['classification' + suffix].isin(ATC_no_data_classes),
-            ATC['classification' + suffix].isin(ATC_unknown_classes)
-        )
+        # _x, _y, is_aerosol, is_no_data, is_unknown = xr.broadcast(
+        #     ATC[timevar], ATC.height, 
+        #     ATC['classification' + suffix].isin(ATC_aerosol_classes),
+        #     ATC['classification' + suffix].isin(ATC_no_data_classes),
+        #     ATC['classification' + suffix].isin(ATC_unknown_classes)
+        # )
         
-        overlay = -2*is_no_data - 1*is_unknown + 1*is_aerosol 
-        hatches = ['//////', '\\\\\\\\\\\\', '', '....']
+        # overlay = -2*is_no_data - 1*is_unknown + 1*is_aerosol 
+        # hatches = ['//////', '\\\\\\\\\\\\', '', '....']
         
-        cs = ax.contourf(_x, _y, overlay,
-                          [-2.5, -1.5, -0.5, 0.5, 1.5], 
-                          colors=['none', 'none', 'none', 'none'], 
-                          hatches=hatches)
-        # if cs is not None and hasattr(cs, "collections"):
-        #     # Set edgecolor and linewidth for hatch visibility
-        #     for collection in cs.collections:
-        #         collection.set_edgecolor('k')
-        #         collection.set_linewidth(0.)
+        # cs = ax.contourf(_x, _y, overlay,
+        #                   [-2.5, -1.5, -0.5, 0.5, 1.5], 
+        #                   colors=['none', 'none', 'none', 'none'], 
+        #                   hatches=hatches)
+        # # if cs is not None and hasattr(cs, "collections"):
+        # #     # Set edgecolor and linewidth for hatch visibility
+        # #     for collection in cs.collections:
+        # #         collection.set_edgecolor('k')
+        # #         collection.set_linewidth(0.)
         
-        # For each level, we set the color of its hatch 
-        for i, collection in enumerate(cs.collections):
-            collection.set_edgecolor('k')
-        # Doing this also colors in the box around each level
-        # We can remove the colored line around the levels by setting the linewidth to 0
-        for collection in cs.collections:
-            collection.set_linewidth(0.)
+        # # For each level, we set the color of its hatch 
+        # for i, collection in enumerate(cs.collections):
+        #     collection.set_edgecolor('k')
+        # # Doing this also colors in the box around each level
+        # # We can remove the colored line around the levels by setting the linewidth to 0
+        # for collection in cs.collections:
+        #     collection.set_linewidth(0.)
         
-        # Create legend patches
-        import matplotlib.patches as mpatches
-        p1 = mpatches.Patch(facecolor='1.0', edgecolor='k', linewidth=0, 
-                            hatch=r'//////', label='no data')
-        p2 = mpatches.Patch(facecolor='0.9', edgecolor='k', linewidth=0, 
-                            hatch='\\\\\\\\\\\\', label='unknown')
-        p3 = mpatches.Patch(facecolor='0.8', edgecolor='k', linewidth=0, 
-                            hatch='', label='hydrometeors')
-        p4 = mpatches.Patch(facecolor='0.7', edgecolor='k', linewidth=0, 
-                            hatch='....', label='aerosol')
-        patches = [p1, p2, p3, p4]
+        # # Create legend patches
+        # # import matplotlib.patches as mpatches
+        # # p1 = mpatches.Patch(facecolor='1.0', edgecolor='k', linewidth=0, 
+        # #                     hatch=r'//////', label='no data')
+        # # p2 = mpatches.Patch(facecolor='0.9', edgecolor='k', linewidth=0, 
+        # #                     hatch='\\\\\\\\\\\\', label='unknown')
+        # # p3 = mpatches.Patch(facecolor='0.8', edgecolor='k', linewidth=0, 
+        # #                     hatch='', label='hydrometeors')
+        # # p4 = mpatches.Patch(facecolor='0.7', edgecolor='k', linewidth=0, 
+        # #                     hatch='....', label='aerosol')
+        # # patches = [p1, p2, p3, p4]
         
-        ax.legend(handles=patches, frameon=False, loc='upper right', 
-                  bbox_to_anchor=(1.41, 1), fontsize=11, 
-                  labelspacing=0.0, handlelength=1.5)
+        # # ax.legend(handles=patches, frameon=False, loc='upper right', 
+        # #           bbox_to_anchor=(1.41, 1), fontsize=11, 
+        # #           labelspacing=0.0, handlelength=1.5)
         
         # Add elevation line
         if 'elevation' in ATC.data_vars:
@@ -4321,7 +4491,10 @@ def quicklook_ATC(ATC, hmax=20e3, resolution='high', dstdir=None, axes=None,
     # Add temperature contours (from Git version)
     if show_temperature and ('temperature' in ATC.data_vars):
         add_temperature(ax, ATC)
-    
+        # Add tropopause line if tropopause_height exists
+    if show_temperature and ('tropopause_height' in ATC.data_vars):
+        add_boundary_line(ax, ATC, 'tropopause_height', 
+                             color='black', linewidth=2, label='Tropopause')
     # Add marble background (from Git version)
     if with_marble:
         add_marble(ax, ATC, timevar='time', lonvar='longitude', 
