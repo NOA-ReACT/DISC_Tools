@@ -223,7 +223,7 @@ def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
     if title:
         ax.set_title(f'{title}', fontsize=14, fontweight='bold')
 
-def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None,
+def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=None,
                       profile='EC',  heightvar='height', title=None, lin_scale=True,
                       log_scale=False, xlim=None, xlim_log=None, yticks=True, 
                       xlabel=True, legend=False,  smoothing=False):
@@ -281,7 +281,7 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         'particle_backscatter_coefficient_355nm': r'$ \beta_{355}$_' + profile,
         'particle_extinction_coefficient_355nm': r'$ \alpha_{355}$_' + profile,
         'lidar_ratio_355nm': r'$ lr_{355}$_' + profile,
-        'particle_linear_depol_ratio_355nm': r'$ \delta_{p355}$_' + profile
+        'particle_linear_depol_ratio_355nm': r'$ \delta_{355}$_' + profile
     }
     
     xlabels = {
@@ -310,17 +310,17 @@ def plot_AEBD_profiles(ds, varname, hmax=16e3, idx=None, ax=None, resolution=Non
         var = ds[varname][idx] * 1e6
         error = ds[f'{varname}_error'][idx] * 1e6
         if smoothing:
-            var = savgol_filter(var, window_length=191, polyorder=3)
+            var = savgol_filter(var, window_length=90, polyorder=3)
             print('smoothed')
     else:
         var = ds[varname][idx]
         if smoothing:
-            var = savgol_filter(var, window_length=191, polyorder=3)
+            var = savgol_filter(var, window_length=90, polyorder=3)
             print('smoothed')
 
         error = ds[f'{varname}_error'][idx]
 
-    if profile == 'EC':
+    if profile == 'EC' :
         height = ds[heightvar][idx]
     else:
         height = ds[heightvar][::]
@@ -458,7 +458,7 @@ def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None
     
     if x_offset:
         ax.scatter(np.ones_like(var) * x_offset, height, marker=marker,
-                  c=[color_dict[x] for x in var.values], s=10)
+                  c=[color_dict[x] for x in var.values], s=15)
     else:
         ax.scatter(var, height, marker=marker, c=[color_dict[x] for x in var.values], s=15)
     
@@ -532,6 +532,130 @@ def plot_AEBD_cla_qs(ds, cla_variable, qs_variable, hmax, title, idx, resolution
                      title=None, idx=idx, plot_type='quality',
                      x_offset=45, legend_number=2, yticks=yticks, xlim=True)
        
+def plot_AEBD_cla_qs_manual(ds, cla_variable, hmax, title, idx, resolution,
+                           qs_segments=None, ax=None, yticks=False):
+    """
+    Plots classification profile together with manually defined quality status line
+    
+    Parameters
+    ----------
+    ds:    xarray.Dataset        | EarthCARE AEBD data 
+    cla_variable : str           | Name of the classification variable
+    hmax : float                 | Maximum height to plot
+    title : str                  | Title of the plot
+    idx : int                    | Index for data selection
+    resolution : float           | Resolution parameter
+    qs_segments : list           | List of tuples (height_start, height_end, category, color, label)
+                                   Example: [(0, 2000, 0, 'orange', 'Aerosol'),
+                                            (2000, 5000, 1, 'blue', 'Cloud'),
+                                            (5000, 10000, 2, 'lightblue', 'High Cloud'),
+                                            (10000, 20000, 3, 'purple', 'Stratosphere')]
+    ax :                         | Pre-defined ax for plotting. If None, creates 
+                                    new figure with subplots (optional)
+    Returns
+    -------
+    fig : matplotlib.figure.Figure | The created figure (only if axes was None)
+    axes : matplotlib.axes.Axes    | The axes used for plotting
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import matplotlib.patches as mpatches
+
+    # Default segments if none provided - atmospheric layers
+    if qs_segments is None:
+        qs_segments = [
+            (0, 2000, 0, 'orange', 'Aerosol (0-2km)'),
+            (2000, 5000, 1, 'blue', 'Cloud (2-5km)'),
+            (5000, 10000, 2, 'lightblue', 'High Cloud (5-10km)'),
+            (10000, hmax, 3, 'purple', 'Stratosphere (>10km)')
+        ]
+    
+    # Create figure and axes if not provided
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 15))
+    else:
+        fig = None
+        
+    # Plot the classification data as before
+    plot_AEBD_scatter(ds=ds, varname=cla_variable, hmax=hmax, ax=ax, resolution=resolution,
+                     title=title, idx=idx, plot_type='classification',
+                     x_offset=1.2, legend_number=1, yticks=yticks)
+    
+    # Get the same x_offset position as the original quality status scatter
+    x_offset = 45  # Same as in your original call
+    
+    # Plot manual scatter segments using custom colors and labels
+    for height_start, height_end, category, color, label in qs_segments:
+        # Apply height limit
+        if height_start > hmax:
+            continue
+        if height_end > hmax:
+            height_end = hmax
+            
+        # Create scatter points within the height range
+        # Sample points every ~100m or use segment resolution
+        height_step = 132  # Height resolution in meters (adjust as needed)
+        heights_in_segment = np.arange(height_start, height_end, height_step)
+        
+        # If segment is too small, ensure at least a few points
+        if len(heights_in_segment) < 3:
+            heights_in_segment = np.linspace(height_start, height_end, 5)
+        
+        # Create x positions (all at same offset)
+        x_positions = np.ones_like(heights_in_segment) * x_offset
+        
+        # Plot scatter points with triangular markers (same as original quality status)
+        ax.scatter(x_positions, heights_in_segment, 
+                  marker='v', c=color, s=10)  # 'v' for triangular markers, s=10 for size
+    
+    # Create legend using custom colors and labels from segments
+    # Get unique segments (avoid duplicates if any)
+    unique_segments = []
+    seen_categories = set()
+    for seg in qs_segments:
+        height_start, height_end, category, color, label = seg
+        if category not in seen_categories and height_start < hmax:
+            unique_segments.append((category, color, label))
+            seen_categories.add(category)
+    
+    # Sort by category number for consistent legend order
+    unique_segments.sort(key=lambda x: x[0])
+    
+    # Extract colors and labels for legend
+    colors = [seg[1] for seg in unique_segments]
+    labels = [seg[2] for seg in unique_segments]
+    
+    # Create fake handles for legend (same as in plot_AEBD_scatter)
+    fake_handles = [mpatches.Patch(color=c) for c in colors]
+    
+    # Get the existing classification legend before adding quality status legend
+    classification_legend = ax.get_legend()
+    
+    # Add quality status legend with same positioning and styling as original
+    quality_legend = ax.legend(fake_handles, labels,
+             loc='center left',
+             bbox_to_anchor=(1.02, 0.5),  # Same as legend_number=2 in original
+             framealpha=0.5,
+             prop={'size': 8},
+             title='Ground Classification',
+             frameon=True,
+             title_fontproperties={'weight': 'bold', 'size': 9})
+    
+    # Add back the classification legend if it existed
+    if classification_legend:
+        ax.add_artist(classification_legend)
+    
+    # Set x-axis limits to match original (same as xlim=True in plot_AEBD_scatter)
+    ax.set_xlim([-10, x_offset * 1.5])
+    
+    # Add label for the quality status line (same style as original)
+    xlim = ax.get_xlim()
+    # ax.text(x_offset + 0.01 * (xlim[1] - xlim[0]), hmax * 0.95, 
+    #        line_label, rotation=0, ha='left', va='top',
+    #        fontsize=10, fontweight='bold')
+    
+    return fig, ax
+
 def plot_paired_profiles(ec_data, sim_data, variable, hmax, ax=None, 
                         heightvar='sample_altitude', title=None, xlim=None, 
                         xlim_log=None, yticks=True,xlabel=False,legend=False,
@@ -639,7 +763,7 @@ def plot_profile_comparison(ec_data, sim_data, variables, axes=None, hmax=15e3,
         fig.tight_layout()
     
 def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates, 
-                    shortest_distance, max_distance, buffer=1.4, lat2=None, 
+                    shortest_distance, max_distance, buffer=1.2, lat2=None, 
                     lon2=None, distance_idx_nearest=None, idx=None, ax=None):
     """
     Plots the satellite orbit path on a map with a 'max_distance' radius circle around 
@@ -659,7 +783,7 @@ def plot_orbit_map(latitudes, longitudes, station_name, station_coordinates,
     
     lat_min = station_lat - 1.5 * buffer
     lat_max = station_lat + 1.5 * buffer
-    lon_min = station_lon - buffer
+    lon_min = station_lon - 1.5*buffer
     lon_max = station_lon + 1.2*buffer
     
     if ax is None:

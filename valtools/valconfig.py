@@ -24,10 +24,10 @@ Modifies each of the following parameters according to the case of interest.
     """
 
 DEFAULT_CONFIG_L1 = {
-    'ROOT_DIR': '/home/akaripis/earthcare/files/20250416',
+    'ROOT_DIR': '/home/akaripis/earthcare/files/20250614',
     'BASELINE': 'A*',
-    'MAX_DISTANCE': 35,
-    'HMAX': [12e3,12e3,12e3],
+    'MAX_DISTANCE': 50,
+    'HMAX': [10e3,10e3,10e3],
     'FIG_SCALE': 'log',
     'NETWORK': 'POLLYXT',
     'FIGSIZE': (27, 15),
@@ -41,10 +41,10 @@ DEFAULT_CONFIG_L1 = {
 }
 
 DEFAULT_CONFIG_L2 = {
-    'ROOT_DIR': '/home/akaripis/earthcare/files/20250306',
-    'BASELINE': 'A*',
-    'MAX_DISTANCE': 100,
-    'HMAX': [20e3,20e3,20e3],
+    'ROOT_DIR': '/home/akaripis/earthcare/files/20250416',
+    'BASELINE': 'B*',
+    'MAX_DISTANCE': 50,
+    'HMAX': [10e3,10e3,10e3],
     'FIG_SCALE': 'linear',
     'NETWORK': 'POLLYXT',#EARLINET, #THELISYS
     'FIGSIZE': (35, 20),
@@ -55,10 +55,10 @@ DEFAULT_CONFIG_L2 = {
         'particle_linear_depol_ratio_355nm'
     ],
     'RESOLUTION': 'low',
-    'DEFAULT_XLIMS': [(-1, 10.), (-20, 250), (-20, 200), (-0.1, 0.75)],
+    'DEFAULT_XLIMS': [(-1, 10.), (-20, 380), (-20, 200), (-0.1, 0.75)],
     'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-2, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
-    'SMOOTHING': True,
-    'COMP_TYPE': 'average', 
+    'SMOOTHING': False,
+    'COMP_TYPE': 'average_profiles', #οptions: average(50km), average_profiles(10profiles), profile
     'RETRIEVAL': 'RAMAN' #All caps
 }

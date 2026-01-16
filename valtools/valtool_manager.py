@@ -75,11 +75,16 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
     SIM = SIM.isel(height=slice(None, None, -1))
     print('Loaded simulator file, moving to EC files ')
 
-    # Load and crop EC product
-    anom, anom_50km, shortest_time, baseline, distance_idx_nearest, dst_min, dist_idx = (
-        load_crop_EC_product( anompath, station_coordinates, 'ANOM', max_distance=max_distance,
-        second_trim=False, second_distance=100)
-        )
+    # Load and crop ANOM product
+    try:
+        anom, anom_50km, shortest_time, baseline, distance_idx_nearest, dst_min, dist_idx = (
+            load_crop_EC_product( anompath, station_coordinates, 'ANOM', max_distance=max_distance,
+            second_trim=False, second_distance=100)
+            )
+    except Exception as e:
+        print("ANOM dataset not in range of the station.")
+        raise
+    
     # Format overpass date
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     #overpass_date = '2023-09-24 14:10:20' #mock value for dummy  files.
@@ -141,38 +146,44 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
     for ax, params in adjustments.items():
         adjust_subplot_position(ax, **params)
 
-    # Plot GND data
-    if network == 'EARLINET' or network == 'THELISYS':
-        variables_q = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
-        titles_q = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
-        plot_range = [[0, 15e8], [0, 0.2]]
-        heightvar = 'altitude'
-        units = ['m⁻¹ sr⁻¹','-']
-    elif network == 'POLLYXT':
-        variables_q = ['attenuated_backscatter_355nm', 'volume_depolarization_ratio_355nm']
-        titles_q = [f'{station_name} att.bsc', f'{station_name} vol.depol.ratio']
-        plot_range = [[0, 1.5e-5], [0, 0.3]]
-        heightvar= 'height'
-        units = ['m⁻¹ sr⁻¹','-']
-    elif network == 'LICHT':
-        variables_q = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
-        titles_q = [f'{station_name}  part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
-        plot_range = [[1e-7, 5e-5], [0.005, 0.8]]
-        heightvar = 'height'
-        units = ['m⁻¹ sr⁻¹','-']
-    else:
-        # Default case or error handling
-        raise ValueError(f"Unsupported network: {network}. Must be either 'EARLINET' or 'POLLYXT'")
-        
-    axs = [ax4,ax5]
     
-    for i, (ax, variable, title, p_range, unit) in enumerate(zip(axs, variables_q, titles_q, plot_range, units)):
+    if network in ('EARLINET', 'THELISYS'):
+        variables_q  = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
+        titles_q     = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
+        plot_scales  = ['log', 'linear']                      # first log, second linear
+        plot_ranges  = [[1e7, 1e9], [0.0, 0.2]]            # numeric limits
+        heightvar    = 'altitude'
+        units        = ['m⁻¹ sr⁻¹', '-']
+    
+    elif network == 'POLLYXT':
+        variables_q  = ['attenuated_backscatter_355nm', 'volume_depolarization_ratio_355nm']
+        titles_q     = [f'{station_name} att.bsc', f'{station_name} vol.depol.ratio']
+        plot_scales  = ['log', 'linear']
+        plot_ranges  = [[1e-8, 3e-5], [0.0, 0.3]]
+        heightvar    = 'height'
+        units        = ['m⁻¹ sr⁻¹', '-']
+    
+    elif network == 'LICHT':
+        variables_q  = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
+        titles_q     = [f'{station_name} part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
+        plot_scales  = ['log', 'linear']
+        plot_ranges  = [[1e-7, 5e-5], [0.005, 0.8]]
+        heightvar    = 'height'
+        units        = ['m⁻¹ sr⁻¹', '-']
+    
+    else:
+        raise ValueError(f"Unsupported network: {network}. Must be one of 'EARLINET', 'THELISYS', 'POLLYXT', 'LICHT'.")
+
+    axs = [ax4, ax5]
+    #pdb.set_trace()
+    for i, (ax, variable, title, scale, p_range, unit) in enumerate(zip(axs, variables_q, titles_q, plot_scales, plot_ranges, units)):
+           
         ecplt.plot_gnd_2D(ax, gnd_quicklook, variable, ' ', heightvar=heightvar,
-                          cmap=clm.chiljet2, plot_scale='linear',
-                          plot_range=p_range, units=unit, hmax=hmax[1],
-                          plot_position='bottom',
-                          title=title, comparison=True,
-                          scc=True, yticks=(i == 0), xticks=False)
+                               cmap=clm.chiljet2, plot_scale=scale, plot_range=p_range,
+                               units=unit, hmax=hmax[1],# hmax=hmax if hmax < 22e3 else 22e3,
+                              plot_position='bottom',
+                              title=title, comparison=True,
+                              scc=True, yticks=(i == 0), xticks=False)
     # Adjust the profiles axis
     ax6 = fig.add_subplot(gs[4:, 3])
     ax7 = fig.add_subplot(gs[4:, 4])
@@ -225,7 +236,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                       distance_idx_nearest, dst_min, aebd_profiles, atc,
                       atc_100km, gnd_profiles, dstdir, hmax,
                       fig_scale , network, keyword=None, figsize=(35, 20), 
-                      smoothing = False):
+                      smoothing = False, comp_type='average'):
     """
     Creates L2 comparison plots between EarthCARE and ground data.
     
@@ -261,7 +272,6 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     lin_scale = fig_scale != 'log'  # True unless fig_scale is 'log'
     log_scale = fig_scale != 'linear'  # True unless fig_scale is 'linear'
         
-    #pdb.set_trace()    
     time = (aebd_50km['time'])[idx]
     overpass_time = pd.Timestamp(time.item()).strftime('%d-%m-%Y %H:%M:%S.%f')[:-7]
 
@@ -310,7 +320,14 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                  1.2], height_ratios=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], hspace=1.8,
                  wspace=0.6, top=0.85)
     
-    if network == 'LICHT':
+    if network == 'POLLYXT' or network == 'EARLINET':
+        # Add main title
+        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison at {overpass_time} UTC with\n'
+                      f' {station_name} Ground Station L2 {keyword} Retrieval at {gnd_overpass_time} UTC',
+                      fontsize=26, weight='bold', va='top', y=.96)
+
+
+    else:
         lidar_name = 'MPI LICHT' # PollyXT # THELISYS
 
         fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with '
@@ -318,11 +335,9 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                      f'ECA: {overpass_time} UTC - '
                      f'{lidar_name}: {gnd_overpass_time} UTC\n',
                      fontsize=26, weight='bold', va='top', y=.96)
-    else:
-        # Add main title
-        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison at {overpass_time} UTC with\n'
-                     f' {station_name} Ground Station L2 {keyword} Retrieval at {gnd_overpass_time} UTC',
-                     fontsize=26, weight='bold', va='top', y=.96)
+        # fig.suptitle(f'Daqi-1 - ACDL({baseline[0]}) Comparison at {overpass_time} UTC with\n'
+        #              f' {station_name} Ground Station L2 {keyword} Retrieval at {gnd_overpass_time} UTC',
+        #              fontsize=26, weight='bold', va='top', y=.96)
 
 
     # Create and adjust quicklook axes
@@ -342,7 +357,6 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
 
     for ax, params in adjustments.items():
         adjust_subplot_position(ax, **params)
-    #pdb.set_trace()
     # Plot EBD and TC
     ecplt.quicklook_AEBD(aebd_50km, resolution=resolution, hmax=hmax[0], #hmax=1.5*hmax if hmax < 30e3 else 30e3,
                          dstdir=None, axes=[ax1, ax2, ax3, ax4, ax5],
@@ -364,38 +378,46 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     for ax, params in adjustments.items():
         adjust_subplot_position(ax, **params)
 
-    # Plot GND data
-    if network == 'EARLINET' or network == 'THELISYS':
-        variables_q = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
-        titles_q = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
-        plot_range = [[1e-6, 15e8], [1e-6, 0.2]]
-        heightvar = 'altitude'
-        units=['-','-']
+    # pick a tiny positive floor for log axes
+
+    
+    if network in ('EARLINET', 'THELISYS'):
+        variables_q  = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
+        titles_q     = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
+        plot_scales  = ['log', 'linear']                      # first log, second linear
+        plot_ranges  = [[1e7, 1e9], [0.0, 0.4]]            # numeric limits
+        heightvar    = 'altitude'
+        units        = ['m⁻¹ sr⁻¹', '-']
+    
     elif network == 'POLLYXT':
         variables_q = ['quasi_bsc_532', 'quasi_pardepol_532']
         titles_q = [f'{station_name} att.bsc', f'{station_name} par.depol.ratio']
-        plot_range = [[0, 15e-6], [0, 0.4]]
+        plot_scales  = ['log', 'linear']                      # first log, second linear
+        plot_ranges = [[1e-8, 15e-6], [0, 0.4]]
         heightvar = 'height'
         units = ['m⁻¹ sr⁻¹','-']
-    elif network == 'LICHT':
-        variables_q = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
-        titles_q = [f'{station_name}  part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
-        plot_range = [[1e-7, 5e-5], [0.005, 0.8]]
-        heightvar = 'height'
-        units = ['m⁻¹ sr⁻¹','-']
-    else:
-        # Default case or error handling
-        raise ValueError(f"Unsupported network: {network}. Must be either 'EARLINET' or 'POLLYXT'")
-        
-    axs = [ax6,ax7]
     
-    for i, (ax, variable, title, p_range, unit) in enumerate(zip(axs, variables_q, titles_q, plot_range, units)):
+    # elif network == 'LICHT':
+    #     variables_q  = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
+    #     titles_q     = [f'{station_name} part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
+    #     plot_scales  = ['log', 'linear']
+    #     plot_ranges  = [[1e-7, 5e-5], [0.005, 0.8]]
+    #     heightvar    = 'height'
+    #     units        = ['m⁻¹ sr⁻¹', '-']
+    
+    else:
+        raise ValueError(f"Unsupported network: {network}. Must be one of 'EARLINET', 'THELISYS', 'POLLYXT', 'LICHT'.")
+
+    axs = [ax6, ax7]
+
+    for i, (ax, variable, title, scale, p_range, unit) in enumerate(zip(axs, variables_q, titles_q, plot_scales, plot_ranges, units)):
+           
         ecplt.plot_gnd_2D(ax, gnd_quicklooks, variable, ' ', heightvar=heightvar,
-                           cmap=clm.chiljet2, plot_scale='linear', plot_range=p_range,
-                           units=unit, hmax=hmax[1],# hmax=hmax if hmax < 22e3 else 22e3,
-                          plot_position='bottom',
-                          title=title, comparison=True,
-                          scc=True, yticks=(i == 0), xticks=False)
+                               cmap=clm.chiljet2, plot_scale=scale, plot_range=p_range,
+                               units=unit, hmax=hmax[1],# hmax=hmax if hmax < 22e3 else 22e3,
+                              plot_position='bottom',
+                              title=title, comparison=True,
+                              scc=True, yticks=(i == 0), xticks=False)
 
 
     # Create and adjust profile axes
@@ -403,11 +425,10 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     ax9 = fig.add_subplot(gs[4:10, 4])
     ax10 = fig.add_subplot(gs[4:10, 5])
     ax11 = fig.add_subplot(gs[4:10, 6:7])
-    if not DEFAULT_CONFIG_L2['COMP_TYPE'] == 'average':
+    if comp_type not in ['average', 'average_profiles']:
         ax12 = fig.add_subplot(gs[4:10, 7])
     
-
-    if not DEFAULT_CONFIG_L2['COMP_TYPE'] == 'average':
+    if comp_type not in ['average', 'average_profiles']:
         adjustments = {
             ax8: {'x_offset': 0.05, 'height_scale': 1},
             ax9: {'x_offset': 0.04, 'height_scale': 1},
@@ -443,8 +464,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     titles = ['Bsc. Coef.', 'Ext. Coef.', 'Lidar Ratio', 'Lin. depol. ratio']
     #pdb.set_trace()
     idxx=idx
-    if DEFAULT_CONFIG_L2['COMP_TYPE'] == 'average':
-        
+    if comp_type in ['average', 'average_profiles']:
         idx=slice(None)
         
     else:
@@ -463,15 +483,25 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                            xlim_log=xlims_log[i] if xlims_log else None,
                            yticks=(i == 0))  # Only True for first axis
     
-    if not DEFAULT_CONFIG_L2['COMP_TYPE'] == 'average':
-        
-        
+    if comp_type not in ['average', 'average_profiles']:
         # Plot classification and quality status
         plot_AEBD_cla_qs(atc_100km, 'classification', 'quality_status', idx=idxx, 
-                         resolution=resolution, hmax=hmax[2], title='Classification & \nQuality Status',
-                         ax=ax12, yticks=False)
+                          resolution=resolution, hmax=hmax[2], title='Classification & \nQuality Status',
+                          ax=ax12, yticks=False)
+        # atmospheric_segments = [
+        # (0, 4266, 0, 'purple', 'Clear'),
+        # (4267, 4864, 1, 'teal', 'CS'),
+        # (4864, 20000, 0, 'purple', 'Clear')
+        # #(10000, 20000, 3, 'purple', 'Stratosphere (>10km)')
+        # ]
+        
+        # # Call your function
+        # plot_AEBD_cla_qs_manual(atc_100km, 'classification', idx=idxx, 
+        #                   resolution=resolution, hmax=hmax[2], title='EC & Ground Classification',
+        #                   ax=ax12, yticks=False, qs_segments=atmospheric_segments)
     # Create and adjust map plot
     ax_map = fig.add_subplot(gs[0:4, 7], projection=ccrs.PlateCarree())
+    #ax_map.set_aspect('auto')  # Allow free aspect ratio
     adjust_subplot_position(ax_map, x_offset=0.01, y_offset=-0.08,
                           height_scale=2.5, width_scale=1.4)
 
@@ -486,19 +516,25 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     # Change time format to avoid saving errors.
     overpass_time_s = pd.Timestamp(time.item()).strftime('%d_%m_%Y_%H_%M_%S.%f')[:-7]
     
-    if DEFAULT_CONFIG_L2['COMP_TYPE'] == 'average':
+    if comp_type == 'average':
         if network == 'LICHT':
             dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
         else:
-            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_avg.png'
+            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_avg_{baseline[0]}.png'
+    elif comp_type =='average_profiles':
+        if network == 'LICHT':
+            dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
+        else:
+            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_avg_prof_{baseline[0]}.png'
     else:
         if network == 'LICHT':
             dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
         else:
-            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_{idx}.png'
-    
+            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_{idx}_{baseline[0]}.png'
+       
     if dstdir:
         fig.savefig(os.path.join(dstdir, dstfile), bbox_inches='tight', dpi=300)    
+        
     # Adjust layout
     plt.tight_layout(rect=[0.1, 0.1, 0.88, 0.82])
     fig.subplots_adjust(top=0.82, bottom=0.1, left=0.1, right=0.88)
@@ -509,7 +545,8 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
                           fig_scale, network, max_distance=DEFAULT_CONFIG_L2['MAX_DISTANCE'],
                           hmax=DEFAULT_CONFIG_L2['HMAX'], raman=True, klett=False,
                           figsize=DEFAULT_CONFIG_L2['FIGSIZE'], 
-                          smoothing = DEFAULT_CONFIG_L2['SMOOTHING']):
+                          smoothing = DEFAULT_CONFIG_L2['SMOOTHING'],    
+                          comp_type = DEFAULT_CONFIG_L2['COMP_TYPE']):
     """
     Create comparison plots between EarthCARE L2 and ground-based data.
     
@@ -531,25 +568,33 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
     -------
     fig: matplotlib.figure   | The generated comparison plot figure
     """
-
+    print('Start file loading')
     # Load and process GND data
     gnd_quicklook, gnd_profile, station_name, \
         station_coordinates = load_ground_data(network, gndfolderpath, 'L2',
                                                 scc_term= 'b0355')
+    
+    print('Successfully loaded ground data')
     ###Load and process EarthCARE products####
-    
     # Load and crop AEBD  and  ATC product
-    aebd, aebd_50km, shortest_time, aebd_baseline, distance_idx_nearest, \
-        dst_min, s_dist_idx, aebd_100km = load_crop_EC_product(
-            aebdpath, station_coordinates, product='AEBD',
-            max_distance=max_distance, second_trim=True, second_distance=200)
-    # Load and crop AEBD  and  ATC product
-    atc, atc_100km, atc_baseline = load_crop_EC_product(
-        atcpath, station_coordinates, 'ATC', max_distance=max_distance)
-    #pdb.set_trace()
-    baseline = [aebd_baseline, atc_baseline]
+    try:
+        aebd, aebd_50km, shortest_time, aebd_baseline, distance_idx_nearest, \
+            dst_min, s_dist_idx = load_crop_EC_product(
+                aebdpath, station_coordinates, product='AEBD',
+                max_distance=max_distance, second_trim=False)
+    except Exception as e:
+        print("AEBD dataset not in range of the station.")
+        raise
     
-    #pdb.set_trace()
+    # Load and crop ATC product
+    try:
+        atc, atc_100km, atc_baseline = load_crop_EC_product(
+            atcpath, station_coordinates, 'ATC', max_distance=max_distance)
+    except Exception as e:
+        print("ATC dataset not in range of the station.")
+        atc, atc_100km, atc_baseline = None
+    
+    print('Successfully loaded EarthCARE data')
     
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     
@@ -559,20 +604,27 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
         if gnd_quicklook is not None:
             gnd_quicklook = crop_polly_file(gnd_quicklook, overpass_date)
         
-    comp_type = DEFAULT_CONFIG_L2['COMP_TYPE']
-    
-    if comp_type == 'average':
-        # idx_range = [s_dist_idx]
-        # aebd_profile = aebd_50km.mean('along_track')
-        idx_range = range(s_dist_idx-2, s_dist_idx+3)
-        aebd_profile = aebd_50km.isel(along_track =idx_range).mean('along_track')
+    if comp_type == 'average_profiles':
+        idx_range = [s_dist_idx]
+        aebd_profile = aebd_50km.isel(along_track=idx_range).mean('along_track') #       idx_range = [s_dist_idx]
+        print(f"s_dist_idx: {s_dist_idx}")
+        print(f"along_track size: {aebd_50km.dims['along_track']}")
+        print(f"idx_range: {list(range(s_dist_idx-5, s_dist_idx+4))}")
+        #idx_range = [s_dist_idx]
+
     elif comp_type == 'profile':
-        idx_range = range(s_dist_idx-2, s_dist_idx+3)
+        idx_range = range(s_dist_idx-29, s_dist_idx+2)
         aebd_profile = aebd_50km
-    
+    elif comp_type == 'average':
+        idx_range = [s_dist_idx]
+        aebd_profile = aebd_50km.mean('along_track')
+        
+    #pdb.set_trace()
     raman = DEFAULT_CONFIG_L2['RETRIEVAL'] != 'KLETT'  # True unless RETRIEVAL is 'KLETT'
     klett = DEFAULT_CONFIG_L2['RETRIEVAL'] != 'RAMAN'  # True unless RETRIEVAL is 'RAMAN'
-
+    
+    baseline = [aebd_baseline, atc_baseline]
+    
     for idx in idx_range:
         if network == 'EARLINET':
             # For EARLINET, gnd_profile is a list of datasets
@@ -593,7 +645,8 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
                                 shortest_time, baseline, distance_idx_nearest,
                                 dst_min, aebd_profile, atc, atc_100km,
                                 (gnd_data), dstdir, hmax, fig_scale, 
-                                network, keyword,figsize=figsize,smoothing=smoothing)
+                                network, keyword,figsize=figsize,smoothing=smoothing,
+                                comp_type=comp_type)
         else:
          for time_idx in range(gnd_profile.dims['time']):    
             
@@ -604,7 +657,8 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
                            shortest_time, baseline, distance_idx_nearest,
                            dst_min, aebd_profile, atc, atc_100km,
                            gnd_data, dstdir, hmax, fig_scale, 
-                           network, figsize=figsize,smoothing=smoothing)
+                           network, figsize=figsize,smoothing=smoothing,
+                           comp_type=comp_type)
             else:
                 if network == 'POLLYXT':
                     polly_raman, polly_klett = read_pollynet_profile(gnd_profile.isel(time=time_idx), 
@@ -629,4 +683,5 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
                            shortest_time, baseline, distance_idx_nearest,
                            dst_min, aebd_profile, atc, atc_100km,
                            gnd_data, dstdir, hmax, fig_scale, 
-                           network, keyword, figsize=figsize, smoothing=smoothing)
+                           network, keyword, figsize=figsize, smoothing=smoothing,
+                           comp_type=comp_type)

@@ -44,82 +44,6 @@ def extract_date(filename, keyword, file_type):
             
     return datetime.max
 
-# def build_paths(root_dir, network, level):
-#     """
-#     Build paths dictionary from root directory and create directories if they don't exist
-    
-#     Parameters
-#     ----------
-#     root_dir : str  | Root directory containing the L1 and L2 structure
-#     level: str      | Level of data process to search for the equivalent folder: 
-#                      either L1 or L2
-        
-#     Returns
-#     -------
-#     dict
-#         Dictionary with paths for AEBD, ATC, SCC, POLLY, and OUTPUT
-#     """
-#     # Ensure root_dir exists
-#     if not os.path.exists(root_dir):
-#         raise ValueError(f"Root directory does not exist: {root_dir}")
-#     if network == 'EARLINET' or network == 'THELISYS':
-#         gnd_suffix ='scc'
-#     elif network == 'POLLYXT':
-#         gnd_suffix = 'tropos'
-#     elif network == 'LICHT':
-#         gnd_suffix = 'licht'
-    
-#     # First create the base directories
-#     if level =='L1':
-#         base_dirs = {
-#             'ANOM': os.path.join(root_dir, level, 'eca'),
-#             'SIM': os.path.join(root_dir, level, 'sim'),
-#             'GND': os.path.join(root_dir, level, 'gnd', gnd_suffix),
-#             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
-#         }
-#     elif level == 'L2':      
-#         base_dirs = {
-#             'AEBD': os.path.join(root_dir, level, 'eca'),
-#             'ATC': os.path.join(root_dir, level, 'eca'),
-#             'ACTC': os.path.join(root_dir, level, 'eca'),
-#             'MRGR': os.path.join(root_dir, level, 'eca'),
-#             'CFMR': os.path.join(root_dir, level, 'eca'),
-#             'GND': os.path.join(root_dir, level, 'gnd', gnd_suffix),
-#             'OUTPUT': os.path.join(root_dir, level, 'plots_comparison')
-#         }
-    
-#     # Create all base directories
-#     for key, path in base_dirs.items():
-#         os.makedirs(path, exist_ok=True)
-    
-#     # Now find files and build the final paths dictionary
-#     if level =='L1':
-#         paths = {
-#             'ANOM': glob.glob(os.path.join(base_dirs['ANOM'], '*ATL_NOM*.h5')),
-#             'SIM': glob.glob(os.path.join(base_dirs['SIM'], '*ATL_NOM*.h5')),
-#             'GND': base_dirs['GND'],
-#             'OUTPUT': base_dirs['OUTPUT']
-#         }
-#         paths['ANOM'] = paths['ANOM'][0] if paths['ANOM'] else None
-#         paths['SIM'] = paths['SIM'][0] if paths['SIM'] else None
-#     elif level == 'L2':      
-#         paths = {
-#             'AEBD': glob.glob(os.path.join(base_dirs['AEBD'], '*ATL_EBD*.h5')),
-#             'ATC': glob.glob(os.path.join(base_dirs['ATC'], '*ATL_TC__*.h5')),
-#             'ACTC': glob.glob(os.path.join(base_dirs['ACTC'], '*AC__TC__*')),
-#             'MRGR': glob.glob(os.path.join(base_dirs['MRGR'], '*MSI_RGR_*')),
-#             'CFMR': glob.glob(os.path.join(base_dirs['ACTC'], '*CPR_FMR*')),
-#             'GND': base_dirs['GND'],
-#             'OUTPUT': base_dirs['OUTPUT']
-#         }
-#         paths['AEBD'] = paths['AEBD'][0] if paths['AEBD'] else None
-#         paths['ATC'] = paths['ATC'][0] if paths['ATC'] else None
-#         paths['ACTC'] = paths['ACTC'][0] if paths['ACTC'] else None
-#         paths['MRGR'] = paths['MRGR'][0] if paths['MRGR'] else None
-#         paths['CFMR'] = paths['CFMR'][0] if paths['CFMR'] else None
-    
-#     return paths
-
     
 def filter_files_by_baseline(file_list, baseline):
     """Filter files based on baseline criteria"""
@@ -260,7 +184,7 @@ def load_ground_data(network, data_path, data_type='L1', scc_term ='b0355', date
                 print('b0355')
             gnd_profile = ([gnd_profile_b, gnd_profile_e])
             try:
-                gnd_quicklook = load_process_scc_L1(data_path,date)
+                gnd_quicklook, _, _ = load_process_scc_L1(data_path)
             except Exception:
                 gnd_quicklook = None
             station_name = gnd_profile_b.attrs['location'].split(',')[0].strip()
@@ -453,7 +377,7 @@ def process_multiple_files(folder_path, network, file_type=None, date=None):
                 if not isinstance(filedate, pd.Timestamp):
                     filedate = pd.to_datetime(filedate)
                 # Fixed the boolean logic with parentheses
-                if (filedate > date - pd.Timedelta('2H')) & (filedate < date + pd.Timedelta('2H')):
+                if (filedate > date - pd.Timedelta('4H')) & (filedate < date + pd.Timedelta('4H')):
                     date_filtered.append(file)
         if not date_filtered:
             raise ValueError(f'No files found within ±1.5 hours of {date}')
@@ -520,7 +444,6 @@ def get_nearby_points_within_distance(latitudes, longitudes, reference_coords,
         shortest_distance = np.min(nearest_distances)
         shortest_distance_idx = np.where(nearest_distances == shortest_distance)
         longest_distance = np.max(nearest_distances)
-
     return (distance_idx_nearest, shortest_distance, longest_distance, 
             shortest_distance_idx[0][0])
 
@@ -587,6 +510,7 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
         data = ecio.load_ANOM(filepath)
         data['sample_altitude'].values = data['sample_altitude'].values - data['geoid_offset'].values[:, np.newaxis]
     elif product == 'AEBD':
+        # data = xr.open_dataset(filepath, group='ScienceData')
         data = ecio.load_AEBD(filepath)
         data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
     elif product == 'MRGR':
@@ -596,8 +520,10 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
         data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
 
     product_name=(ecio.load_EC_product(filepath, group='HeaderData/VariableProductHeader/MainProductHeader', 
-                               trim=False))['productName'].item()
+                                trim=False))['productName'].item()
     baseline = (product_name.split('_')[1])[2:]
+    # product_name='ECA_EXBA_ATL_EBD_2A_20250416T000151Z_20250914T125041Z_05011B'
+    # baseline='baseline05'
     
     if product == 'MRGR':
         threshold = 1e36
@@ -658,28 +584,48 @@ def read_pollynet_profile(file, data=False):
     """
     ds_orig = file if data else xr.open_dataset(file)
     
+    # raman_mapping = {
+    #     'aerBsc_raman_355': 'particle_backscatter_coefficient_355nm',
+    #     'uncertainty_aerBsc_raman_355': 'particle_backscatter_coefficient_355nm_error',
+    #     'aerExt_raman_355': 'particle_extinction_coefficient_355nm',
+    #     'uncertainty_aerExt_raman_355': 'particle_extinction_coefficient_355nm_error',
+    #     'aerLR_raman_355': 'lidar_ratio_355nm',
+    #     'uncertainty_aerLR_raman_355': 'lidar_ratio_355nm_error',
+    #     'parDepol_raman_355': 'particle_linear_depol_ratio_355nm',
+    #     'uncertainty_parDepol_raman_355': 'particle_linear_depol_ratio_355nm_error',
+    #     'start_time':'start_time',
+    #     'end_time': 'end_time'
+    # }
+    
+    # klett_mapping = {
+    #     'aerBsc_klett_355': 'particle_backscatter_coefficient_355nm',
+    #     'uncertainty_aerBsc_klett_355': 'particle_backscatter_coefficient_355nm_error',
+    #     'parDepol_klett_355': 'particle_linear_depol_ratio_355nm',
+    #     'uncertainty_parDepol_klett_355': 'particle_linear_depol_ratio_355nm_error',
+    #     'start_time':'start_time',
+    #     'end_time': 'end_time'
+    # }
     raman_mapping = {
-        'aerBsc_raman_355': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_raman_355': 'particle_backscatter_coefficient_355nm_error',
-        'aerExt_raman_355': 'particle_extinction_coefficient_355nm',
-        'uncertainty_aerExt_raman_355': 'particle_extinction_coefficient_355nm_error',
-        'aerLR_raman_355': 'lidar_ratio_355nm',
-        'uncertainty_aerLR_raman_355': 'lidar_ratio_355nm_error',
-        'parDepol_raman_355': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_raman_355': 'particle_linear_depol_ratio_355nm_error',
+        'aerBsc_raman_532': 'particle_backscatter_coefficient_355nm',
+        'uncertainty_aerBsc_raman_532': 'particle_backscatter_coefficient_355nm_error',
+        'aerExt_raman_532': 'particle_extinction_coefficient_355nm',
+        'uncertainty_aerExt_raman_532': 'particle_extinction_coefficient_355nm_error',
+        'aerLR_raman_532': 'lidar_ratio_355nm',
+        'uncertainty_aerLR_raman_532': 'lidar_ratio_355nm_error',
+        'parDepol_raman_532': 'particle_linear_depol_ratio_355nm',
+        'uncertainty_parDepol_raman_532': 'particle_linear_depol_ratio_355nm_error',
         'start_time':'start_time',
         'end_time': 'end_time'
     }
     
     klett_mapping = {
-        'aerBsc_klett_355': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_klett_355': 'particle_backscatter_coefficient_355nm_error',
-        'parDepol_klett_355': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_klett_355': 'particle_linear_depol_ratio_355nm_error',
+        'aerBsc_klett_532': 'particle_backscatter_coefficient_355nm',
+        'uncertainty_aerBsc_klett_532': 'particle_backscatter_coefficient_355nm_error',
+        'parDepol_klett_532': 'particle_linear_depol_ratio_355nm',
+        'uncertainty_parDepol_klett_532': 'particle_linear_depol_ratio_355nm_error',
         'start_time':'start_time',
         'end_time': 'end_time'
     }
-    
     raman_data = {}
     for old_name, new_name in raman_mapping.items():
         if old_name in ds_orig:

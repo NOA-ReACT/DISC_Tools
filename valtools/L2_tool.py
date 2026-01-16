@@ -30,7 +30,7 @@ from valtool_manager import plot_EC_L2_comparison
 from valio import build_paths
 from valconfig import DEFAULT_CONFIG_L2
 
-
+import pdb
 
 
 def main():
@@ -53,9 +53,9 @@ def main():
     """
     
     # Input paths
-    # ROOT_DIR= "/home/akaripis/earthcare/files/20241212"
     ROOT_DIR = DEFAULT_CONFIG_L2['ROOT_DIR']
-    PATHS = build_paths(ROOT_DIR,DEFAULT_CONFIG_L2['NETWORK'], 'L2')
+    PATHS = build_paths(ROOT_DIR,DEFAULT_CONFIG_L2['NETWORK'], 'L2',DEFAULT_CONFIG_L2['BASELINE'])
+    # PATHS['AEBD'] = '/home/akaripis/DQ1/20250416/DQ1_ACDL_20250416_15973_0000392361_Baseline05_EC_like.h5' 
     
     try:
         fig = plot_EC_L2_comparison(aebdpath=PATHS['AEBD'], atcpath=PATHS['ATC'],
@@ -63,7 +63,8 @@ def main():
                                   resolution=DEFAULT_CONFIG_L2['RESOLUTION'],
                                   network = DEFAULT_CONFIG_L2['NETWORK'], 
                                   fig_scale =DEFAULT_CONFIG_L2['FIG_SCALE'],
-                                  smoothing=DEFAULT_CONFIG_L2['SMOOTHING'] )
+                                  smoothing=DEFAULT_CONFIG_L2['SMOOTHING'],
+                                  comp_type = DEFAULT_CONFIG_L2['COMP_TYPE'])
         plt.show()
     except Exception as e:
         print(f'Error in main execution: {str(e)}')
