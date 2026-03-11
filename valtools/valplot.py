@@ -67,7 +67,7 @@ def adjust_subplot_position(ax, x_offset=0.02, y_offset=0, width_scale=1,
                 other_ax.set_position(new_position)
 
 
-def plot_EC_profiles(ds, varname, hmax=15e3, ax=None, profile='EC', 
+def plot_ANOM_profiles(ds, varname, hmax=15e3, ax=None, profile='EC', 
                     heightvar='sample_altitude', title=None,
                     lin_scale=True, log_scale=True, xlim=None, xlim_log=None,
                     yticks=True, xlabel=False, legend=False):
@@ -283,7 +283,7 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
         'lidar_ratio_355nm': r'$ lr_{355}$_' + profile,
         'particle_linear_depol_ratio_355nm': r'$ \delta_{355}$_' + profile
     }
-    
+
     xlabels = {
         'particle_backscatter_coefficient_355nm': ' $\mathregular{[Μm^{-1} sr^{-1}]}$',
         'particle_extinction_coefficient_355nm': ' $\mathregular{[Μm^{-1} ]}$',
@@ -310,12 +310,12 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
         var = ds[varname][idx] * 1e6
         error = ds[f'{varname}_error'][idx] * 1e6
         if smoothing:
-            var = savgol_filter(var, window_length=90, polyorder=3)
+            var = savgol_filter(var, window_length=30, polyorder=3)
             print('smoothed')
     else:
         var = ds[varname][idx]
         if smoothing:
-            var = savgol_filter(var, window_length=90, polyorder=3)
+            var = savgol_filter(var, window_length=30, polyorder=3)
             print('smoothed')
 
         error = ds[f'{varname}_error'][idx]
@@ -690,14 +690,14 @@ def plot_paired_profiles(ec_data, sim_data, variable, hmax, ax=None,
         fig, ax = plt.subplots(figsize=(5, 25))
         
     # Plot EC profiles
-    plot_EC_profiles(ec_data, variable, hmax, ax, profile='EC',
+    plot_ANOM_profiles(ec_data, variable, hmax, ax, profile='EC',
                     heightvar=heightvar,
                     title=variable.split('_')[0].capitalize() if title else None,
                     lin_scale=lin_scale, log_scale=log_scale,
                     xlim=xlim, xlim_log=xlim_log,
                     yticks=yticks, xlabel=xlabel, legend=legend)
                     
-    plot_EC_profiles(sim_data, variable, hmax, ax, profile='SM',
+    plot_ANOM_profiles(sim_data, variable, hmax, ax, profile='SM',
                     heightvar=heightvar, title=None, lin_scale=lin_scale, 
                     log_scale=log_scale, xlim=xlim, xlim_log=xlim_log,
                     yticks=yticks, xlabel=xlabel, legend=legend)

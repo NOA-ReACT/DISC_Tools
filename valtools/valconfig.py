@@ -41,7 +41,7 @@ DEFAULT_CONFIG_L1 = {
 }
 
 DEFAULT_CONFIG_L2 = {
-    'ROOT_DIR': '/home/akaripis/earthcare/files/20250416',
+    'ROOT_DIR': '/home/akaripis/earthcare/files/20250416/',
     'BASELINE': 'B*',
     'MAX_DISTANCE': 50,
     'HMAX': [10e3,10e3,10e3],
@@ -55,10 +55,26 @@ DEFAULT_CONFIG_L2 = {
         'particle_linear_depol_ratio_355nm'
     ],
     'RESOLUTION': 'low',
-    'DEFAULT_XLIMS': [(-1, 10.), (-20, 380), (-20, 200), (-0.1, 0.75)],
+    'DEFAULT_XLIMS': [(-1, 20.), (-20, 380), (-20, 200), (-0.1, 0.75)],
     'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-2, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
-    'SMOOTHING': False,
+    'SMOOTHING': True,
     'COMP_TYPE': 'average_profiles', #οptions: average(50km), average_profiles(10profiles), profile
     'RETRIEVAL': 'RAMAN' #All caps
+}
+
+##### - MAAP usage
+
+CUSTOM_PATHS_L2 = {
+    'AEBD':   None,  # e.g. h5_url from MAAP
+    'ATC':    None,  # e.g. 's3://bucket/path/to/ATL_TC__.h5'
+    'GND':    None,  # e.g. '/local/path/to/gnd/folder'
+    'OUTPUT': None,  # e.g. './plots'
+}
+
+CUSTOM_PATHS_L1 = {
+    'ANOM':   None,
+    'SIM':    None,
+    'GND':    None,
+    'OUTPUT': None,
 }

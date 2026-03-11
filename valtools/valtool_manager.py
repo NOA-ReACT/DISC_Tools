@@ -15,7 +15,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import cartopy.crs as ccrs
 
-from ectools.ectools_bit import ecio, ecplot as ecplt, colormaps as clm
+# from ectools.ectools_bit import ecio, ecplot as ecplt, colormaps as clm
+from ectools_noa import ecio, ecplot_standalone_v2 as ecplt, colormaps as clm
 from valconfig import DEFAULT_CONFIG_L1, DEFAULT_CONFIG_L2
 from valio import*
 from valplot import*
@@ -183,7 +184,7 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
                                units=unit, hmax=hmax[1],# hmax=hmax if hmax < 22e3 else 22e3,
                               plot_position='bottom',
                               title=title, comparison=True,
-                              scc=True, yticks=(i == 0), xticks=False)
+                              gnd=True, yticks=(i == 0), xticks=False)
     # Adjust the profiles axis
     ax6 = fig.add_subplot(gs[4:, 3])
     ax7 = fig.add_subplot(gs[4:, 4])
@@ -330,13 +331,10 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     else:
         lidar_name = 'MPI LICHT' # PollyXT # THELISYS
 
-        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with '
-                     f' {station_name} Ground Station - {lidar_name} L2 Retrieval \n'
-                     f'ECA: {overpass_time} UTC - '
-                     f'{lidar_name}: {gnd_overpass_time} UTC\n',
-                     fontsize=26, weight='bold', va='top', y=.96)
-        # fig.suptitle(f'Daqi-1 - ACDL({baseline[0]}) Comparison at {overpass_time} UTC with\n'
-        #              f' {station_name} Ground Station L2 {keyword} Retrieval at {gnd_overpass_time} UTC',
+        # fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with '
+        #              f' {station_name} Ground Station - {lidar_name} L2 Retrieval \n'
+        #              f'ECA: {overpass_time} UTC - '
+        #              f'{lidar_name}: {gnd_overpass_time} UTC\n',
         #              fontsize=26, weight='bold', va='top', y=.96)
 
 
@@ -359,9 +357,9 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
         adjust_subplot_position(ax, **params)
     # Plot EBD and TC
     ecplt.quicklook_AEBD(aebd_50km, resolution=resolution, hmax=hmax[0], #hmax=1.5*hmax if hmax < 30e3 else 30e3,
-                         dstdir=None, axes=[ax1, ax2, ax3, ax4, ax5],
-                         comparison=True, station=shortest_time, show_temperature=True)
-    
+                          dstdir=None, axes=[ax1, ax2, ax3, ax4, ax5],
+                          comparison=True, station=shortest_time, show_temperature=True)
+
     ecplt.quicklook_ATC(atc_100km, hmax=hmax[0],# hmax=1.5*hmax if hmax < 30e3 else 30e3, 
                         resolution=resolution, dstdir=None, axes=ax5, 
                         comparison=True, station=shortest_time,show_temperature=True)
@@ -417,7 +415,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                                units=unit, hmax=hmax[1],# hmax=hmax if hmax < 22e3 else 22e3,
                               plot_position='bottom',
                               title=title, comparison=True,
-                              scc=True, yticks=(i == 0), xticks=False)
+                              gnd=True, yticks=(i == 0), xticks=False)
 
 
     # Create and adjust profile axes
@@ -474,7 +472,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     for i, (variable, ax, title) in enumerate(zip(variables, axes, titles)):
         if variable in gnd_profiles:
             plot_AEBD_profiles(gnd_profiles, variable, ax=ax, lin_scale=lin_scale,
-                             hmax=hmax[2],log_scale=log_scale, profile='GND',
+                             hmax=8e3,log_scale=log_scale, profile='GND',
                              yticks=(i == 0),smoothing=smoothing)  # Only True for first axis
         plot_AEBD_profiles(aebd_profiles, variable,hmax=hmax[2],resolution=resolution,
                            ax=ax, lin_scale=lin_scale,idx=idx,
@@ -592,7 +590,7 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
             atcpath, station_coordinates, 'ATC', max_distance=max_distance)
     except Exception as e:
         print("ATC dataset not in range of the station.")
-        atc, atc_100km, atc_baseline = None
+        atc, atc_100km, atc_baseline = None, None, None
     
     print('Successfully loaded EarthCARE data')
     

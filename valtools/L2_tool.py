@@ -28,15 +28,14 @@ sys.path.append('/home/akaripis/earthcare')
 import matplotlib.pyplot as plt
 from valtool_manager import plot_EC_L2_comparison
 from valio import build_paths
-from valconfig import DEFAULT_CONFIG_L2
+from valconfig import DEFAULT_CONFIG_L2, CUSTOM_PATHS_L2
 
-import pdb
 
 
 def main():
     """
     Main execution function for the EarthCARE L2 visualization tool.
-    
+    `
     Parameters:
     -----------
     aebdpath (str):             | Path to ANOM data file
@@ -54,8 +53,12 @@ def main():
     
     # Input paths
     ROOT_DIR = DEFAULT_CONFIG_L2['ROOT_DIR']
-    PATHS = build_paths(ROOT_DIR,DEFAULT_CONFIG_L2['NETWORK'], 'L2',DEFAULT_CONFIG_L2['BASELINE'])
-    # PATHS['AEBD'] = '/home/akaripis/DQ1/20250416/DQ1_ACDL_20250416_15973_0000392361_Baseline05_EC_like.h5' 
+
+    # Use CUSTOM_PATHS_L2 if any value is set, otherwise build from ROOT_DIR
+    if any(v is not None for v in CUSTOM_PATHS_L2.values()):
+        PATHS = CUSTOM_PATHS_L2
+    else:
+        PATHS = build_paths(ROOT_DIR, DEFAULT_CONFIG_L2['NETWORK'], 'L2', DEFAULT_CONFIG_L2['BASELINE'])
     
     try:
         fig = plot_EC_L2_comparison(aebdpath=PATHS['AEBD'], atcpath=PATHS['ATC'],

@@ -432,10 +432,8 @@ def get_nearby_points_within_distance(latitudes, longitudes, reference_coords,
         
     distance_idx_nearest = np.where(distance_array < max_distance_km)
     if len(distance_idx_nearest[0]) < 2:
-        print('Not enough points within the specified distance.')
-        shortest_distance = None
-        longest_distance = None
-        shortest_distance_idx = None
+        print('Not enough points within the specified distance. new')
+        return (distance_idx_nearest, None, None, None)
     else:
         nearest_distances = distance_array[distance_idx_nearest]
         
@@ -510,7 +508,6 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
         data = ecio.load_ANOM(filepath)
         data['sample_altitude'].values = data['sample_altitude'].values - data['geoid_offset'].values[:, np.newaxis]
     elif product == 'AEBD':
-        # data = xr.open_dataset(filepath, group='ScienceData')
         data = ecio.load_AEBD(filepath)
         data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
     elif product == 'MRGR':
@@ -522,8 +519,7 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     product_name=(ecio.load_EC_product(filepath, group='HeaderData/VariableProductHeader/MainProductHeader', 
                                 trim=False))['productName'].item()
     baseline = (product_name.split('_')[1])[2:]
-    # product_name='ECA_EXBA_ATL_EBD_2A_20250416T000151Z_20250914T125041Z_05011B'
-    # baseline='baseline05'
+
     
     if product == 'MRGR':
         threshold = 1e36
@@ -584,48 +580,28 @@ def read_pollynet_profile(file, data=False):
     """
     ds_orig = file if data else xr.open_dataset(file)
     
-    # raman_mapping = {
-    #     'aerBsc_raman_355': 'particle_backscatter_coefficient_355nm',
-    #     'uncertainty_aerBsc_raman_355': 'particle_backscatter_coefficient_355nm_error',
-    #     'aerExt_raman_355': 'particle_extinction_coefficient_355nm',
-    #     'uncertainty_aerExt_raman_355': 'particle_extinction_coefficient_355nm_error',
-    #     'aerLR_raman_355': 'lidar_ratio_355nm',
-    #     'uncertainty_aerLR_raman_355': 'lidar_ratio_355nm_error',
-    #     'parDepol_raman_355': 'particle_linear_depol_ratio_355nm',
-    #     'uncertainty_parDepol_raman_355': 'particle_linear_depol_ratio_355nm_error',
-    #     'start_time':'start_time',
-    #     'end_time': 'end_time'
-    # }
-    
-    # klett_mapping = {
-    #     'aerBsc_klett_355': 'particle_backscatter_coefficient_355nm',
-    #     'uncertainty_aerBsc_klett_355': 'particle_backscatter_coefficient_355nm_error',
-    #     'parDepol_klett_355': 'particle_linear_depol_ratio_355nm',
-    #     'uncertainty_parDepol_klett_355': 'particle_linear_depol_ratio_355nm_error',
-    #     'start_time':'start_time',
-    #     'end_time': 'end_time'
-    # }
     raman_mapping = {
-        'aerBsc_raman_532': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_raman_532': 'particle_backscatter_coefficient_355nm_error',
-        'aerExt_raman_532': 'particle_extinction_coefficient_355nm',
-        'uncertainty_aerExt_raman_532': 'particle_extinction_coefficient_355nm_error',
-        'aerLR_raman_532': 'lidar_ratio_355nm',
-        'uncertainty_aerLR_raman_532': 'lidar_ratio_355nm_error',
-        'parDepol_raman_532': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_raman_532': 'particle_linear_depol_ratio_355nm_error',
+        'aerBsc_raman_355': 'particle_backscatter_coefficient_355nm',
+        'uncertainty_aerBsc_raman_355': 'particle_backscatter_coefficient_355nm_error',
+        'aerExt_raman_355': 'particle_extinction_coefficient_355nm',
+        'uncertainty_aerExt_raman_355': 'particle_extinction_coefficient_355nm_error',
+        'aerLR_raman_355': 'lidar_ratio_355nm',
+        'uncertainty_aerLR_raman_355': 'lidar_ratio_355nm_error',
+        'parDepol_raman_355': 'particle_linear_depol_ratio_355nm',
+        'uncertainty_parDepol_raman_355': 'particle_linear_depol_ratio_355nm_error',
         'start_time':'start_time',
         'end_time': 'end_time'
     }
     
     klett_mapping = {
-        'aerBsc_klett_532': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_klett_532': 'particle_backscatter_coefficient_355nm_error',
-        'parDepol_klett_532': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_klett_532': 'particle_linear_depol_ratio_355nm_error',
+        'aerBsc_klett_355': 'particle_backscatter_coefficient_355nm',
+        'uncertainty_aerBsc_klett_355': 'particle_backscatter_coefficient_355nm_error',
+        'parDepol_klett_355': 'particle_linear_depol_ratio_355nm',
+        'uncertainty_parDepol_klett_355': 'particle_linear_depol_ratio_355nm_error',
         'start_time':'start_time',
         'end_time': 'end_time'
     }
+
     raman_data = {}
     for old_name, new_name in raman_mapping.items():
         if old_name in ds_orig:

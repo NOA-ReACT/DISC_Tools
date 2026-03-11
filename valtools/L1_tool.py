@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 
 from valtool_manager import plot_EC_L1_comparison
 from valio import build_paths
-from valconfig import DEFAULT_CONFIG_L1
+from valconfig import DEFAULT_CONFIG_L1, CUSTOM_PATHS_L1
 
 
 
@@ -54,8 +54,13 @@ def main():
                                         profile plots, default: False
     """
     # Input paths
-    root_dir = DEFAULT_CONFIG_L1['ROOT_DIR']
-    PATHS = build_paths(root_dir, DEFAULT_CONFIG_L1['NETWORK'],'L1', DEFAULT_CONFIG_L1['BASELINE'])
+    ROOT_DIR = DEFAULT_CONFIG_L1['ROOT_DIR']
+    
+    # Use CUSTOM_PATHS_L2 if any value is set, otherwise build from ROOT_DIR
+    if any(v is not None for v in CUSTOM_PATHS_L1.values()):
+        PATHS = CUSTOM_PATHS_L1
+    else:
+        PATHS = build_paths(ROOT_DIR, DEFAULT_CONFIG_L1['NETWORK'], 'L1', DEFAULT_CONFIG_L1['BASELINE'])
     
     try:
         fig = plot_EC_L1_comparison(anompath=PATHS['ANOM'], simpath=PATHS['SIM'],
