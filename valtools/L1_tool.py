@@ -29,7 +29,8 @@ Conctact: a.karipis@noa.gr, elmarinou@noa.gr
 Version: 1.0.0
 """
 import sys
-sys.path.append('/home/akaripis/earthcare')
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root -> ectools_noa
 import matplotlib.pyplot as plt
 
 from valtool_manager import plot_EC_L1_comparison

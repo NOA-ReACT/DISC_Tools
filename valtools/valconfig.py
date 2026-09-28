@@ -9,6 +9,8 @@ Modifies each of the following parameters according to the case of interest.
 - MAX_DISTANCE: the distance to which the EC data will be cropped around the station. 
 - HMAX: the maximum height for the plots.First height entry is for the EC quicklooks,
         second for the GND quicklooks and third for the profiles
+- HMIN: L2 profiles only. Data below this height (m) is blanked (not drawn);
+        the y-axis still starts at 0. 0 = nothing blanked.
 - FIGSIZE: size of the figure. Both L1 & L2 tools are custom made to this size.
            A change to it will alter the whole figure. 
 - FIG_SCALE: The scale for the profiles to be plotted.           
@@ -42,9 +44,10 @@ DEFAULT_CONFIG_L1 = {
 
 DEFAULT_CONFIG_L2 = {
     'ROOT_DIR': '/home/akaripis/earthcare/files/20250416/',
-    'BASELINE': 'B*',
+    'BASELINE': 'BA',
     'MAX_DISTANCE': 50,
     'HMAX': [10e3,10e3,10e3],
+    'HMIN': 0,
     'FIG_SCALE': 'linear',
     'NETWORK': 'POLLYXT',#EARLINET, #THELISYS
     'FIGSIZE': (35, 20),
@@ -55,11 +58,11 @@ DEFAULT_CONFIG_L2 = {
         'particle_linear_depol_ratio_355nm'
     ],
     'RESOLUTION': 'low',
-    'DEFAULT_XLIMS': [(-1, 20.), (-20, 380), (-20, 200), (-0.1, 0.75)],
+    'DEFAULT_XLIMS': [(-1, 10.), (-20, 150), (-20, 200), (-0.1, 1)],
     'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-2, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     'SMOOTHING': True,
-    'COMP_TYPE': 'average_profiles', #οptions: average(50km), average_profiles(10profiles), profile
+    'COMP_TYPE': 'average', #οptions: average(50km), average_profiles(10profiles), profile
     'RETRIEVAL': 'RAMAN' #All caps
 }
 

@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 import os
 import glob
-import pdb
 
 import netCDF4
 
@@ -355,236 +354,558 @@ def read_thelisys_data(d, fname, gnd_id):
     return ds
 
 
-def read_acdl_file(data_path, save_output=True):
-    '''
-    Reader function to read ACDL files and rename variables to earthcare variable naming.
-    Purpose: plot easier the data based on the existing earthcare scripts.
+# def read_acdl_file(data_path, save_output=True):
+#     '''
+#     Reader function to read ACDL files and rename variables to earthcare variable naming.
+#     Purpose: plot easier the data based on the existing earthcare scripts.
     
-    Parameters:
-    -----------
+#     Parameters:
+#     -----------
+#     data_path : str
+#         Path to the input ACDL file
+#     save_output : bool, default=True
+#         Whether to save the converted dataset to a new NetCDF file
+    
+#     Returns:
+#     --------
+#     xr.Dataset
+#         Converted dataset with EarthCARE-like variable names
+#     '''
+#     import pandas as pd
+#     import numpy as np
+#     import xarray as xr
+#     from datetime import datetime, timedelta
+#     import os
+
+#     acdl_to_earthcare_mapping = {
+#         '532_Extinction_coefficient': 'particle_extinction_coefficient_355nm',
+#         '532_Lidar_ratio': 'lidar_ratio_355nm',
+#         '532_Particle_Backscatter_coefficient': 'particle_backscatter_coefficient_355nm',
+#         'Color Ratio': 'color_ratio',
+#         'DEM_h': 'dem_height',
+#         'Particle Depolarization Ratio': 'particle_linear_depol_ratio_355nm',
+#         'Height': 'height',
+#         'Latitude': 'latitude',
+#         'Longitude': 'longitude',
+#         'Particle Scattering Ratio': 'particle_scattering_ratio',
+#         'Scene Classification Flag': 'scene_classification_flag',
+#         'UTC_Time': 'time',
+#         'dayornight': 'day_night_flag',
+#         'Attenuated backscatter coefficient 532nm': 'attenuated_backscatter_coefficient_355nm',
+#         'LR_QC': 'lidar_ratio_quality_flag',
+#         'O3': 'ozone_concentration',
+#         'Pressure': 'pressure',
+#         'Temperature': 'temperature',
+#         'Tropospheric height': 'tropospheric_height'
+#     }
+
+#     # Variables that need dimension transposition
+#     variables_to_transpose = {
+#         '532_Extinction_coefficient',
+#         '532_Particle_Backscatter_coefficient', 
+#         'Depolarization_Ratio',
+#         'Color Ratio',
+#         'Particle Scattering Ratio',
+#         'Scene Classification Flag',
+#         'Attenuated backscatter coefficient 532nm',
+#         'LR_QC',
+#         'O3',
+#         'Pressure',
+#         'Temperature'
+#     }
+
+#     # Dimension renaming mappings
+#     basic_dim_mapping = {
+#         'phony_dim_3': 'JSG_height',    
+#         'phony_dim_4': 'along_track',   
+#         'phony_dim_5': 'scalar_dim_1',  
+#         'phony_dim_6': 'scalar_dim_2',  
+#     }
+
+#     auxiliary_dim_mapping = {
+#         'phony_dim_0': 'along_track',   
+#         'phony_dim_1': 'JSG_height',    
+#         'phony_dim_2': 'scalar_dim_3'   
+#     }
+
+#     # Read and process groups
+#     basic = xr.open_dataset(data_path, group='Basic')
+#     auxiliary = xr.open_dataset(data_path, group='Auxiliary')
+
+#     basic_renamed = basic.rename_dims(basic_dim_mapping)
+#     auxiliary_renamed = auxiliary.rename_dims(auxiliary_dim_mapping)
+
+#     # Drop singleton dimensions
+#     basic_squeezed = basic_renamed.squeeze(drop=True)
+#     auxiliary_squeezed = auxiliary_renamed.squeeze(drop=True)
+
+#     # Merge groups
+#     acdl = xr.merge([basic_squeezed, auxiliary_squeezed])
+
+#     # Helper function to convert MATLAB datenum to datetime64
+#     def matlab_datenum_to_datetime64(datenum_array):
+#         """
+#         Convert MATLAB datenum to numpy datetime64
+#         """
+#         matlab_epoch_offset = 719529  # Days from year 1 to year 1970
+#         days_since_unix_epoch = datenum_array - matlab_epoch_offset
+#         seconds_since_unix_epoch = days_since_unix_epoch * 24 * 3600
+#         datetime_array = np.array(seconds_since_unix_epoch * 1e9, dtype='datetime64[ns]')
+#         return datetime_array
+
+#     # Collect and process variables
+#     acdl_data = {}
+#     for old_name, new_name in acdl_to_earthcare_mapping.items():
+#         if old_name in acdl:
+#             var = acdl[old_name]
+
+#             # Special handling for time conversion
+#             if old_name == 'UTC_Time':
+#                 # Convert MATLAB datenum to datetime64
+#                 time_values = matlab_datenum_to_datetime64(var.values)
+
+#                 acdl_data[new_name] = (
+#                     var.dims,
+#                     time_values,
+#                     var.attrs
+#                 )
+#                 continue
+
+#             # Transpose variables that need it
+#             if old_name in variables_to_transpose and var.dims == ('JSG_height', 'along_track'):
+#                 var = var.transpose('along_track', 'JSG_height')
+
+#             acdl_data[new_name] = (
+#                 var.dims,
+#                 var.values,
+#                 var.attrs
+#             )
+
+#     # Create new dataset
+#     acdl_new = xr.Dataset(acdl_data)
+#     # Define parameters that need error arrays
+#     parameters_needing_errors = {
+#         'particle_extinction_coefficient_355nm': 'particle_extinction_coefficient_355nm_error',
+#         'particle_backscatter_coefficient_355nm': 'particle_backscatter_coefficient_355nm_error', 
+#         'lidar_ratio_355nm': 'lidar_ratio_355nm_error',
+#         'particle_linear_depol_ratio_355nm': 'particle_linear_depol_ratio_355nm_error'
+#     }
+    
+#     # Add error arrays for specified parameters
+#     for param_name, error_name in parameters_needing_errors.items():
+#         if param_name in acdl_new:
+#             param_var = acdl_new[param_name]
+            
+#             # Create error array with same shape and dimensions as the parameter
+#             error_array = np.zeros_like(param_var.values, dtype=np.float32)
+            
+#             # Create error variable with same dimensions and appropriate attributes
+#             acdl_new[error_name] = (
+#                 param_var.dims,
+#                 error_array,
+#                 {
+#                     'units': param_var.attrs.get('units', ''),
+#                     'long_name': f"{param_var.attrs.get('long_name', param_name)} error",
+#                     'description': f"Measurement error for {param_name}",
+#                     '_FillValue': np.nan
+#                 }
+#             )
+    
+#     # Add geoid_offset variable with zero values along along_track dimension
+#     if 'along_track' in acdl_new.dims:
+#         along_track_size = acdl_new.dims['along_track']
+#         acdl_new['geoid_offset'] = (
+#             ('along_track',),
+#             np.zeros(along_track_size, dtype=np.float32),
+#             {'units': 'm', 'long_name': 'Geoid offset', 'description': 'Height offset from geoid to ellipsoid'}
+#         )
+
+#     # Add along_track coordinate like EarthCARE
+#     if 'time' in acdl_new:
+#         along_track_size = acdl_new.dims['along_track']
+#         acdl_new = acdl_new.assign_coords(
+#             along_track=np.arange(along_track_size)
+#         )
+
+#     # ADD MISSING METADATA FOR PLOTTING COMPATIBILITY
+#     # Extract filename from path for product code
+#     filename = os.path.basename(data_path)
+#     product_code = filename.split('.')[0]  # Remove file extension
+
+#     # Add encoding metadata that the plotting function expects
+#     acdl_new.encoding['source'] = data_path
+
+#     # Add global attributes that might be expected
+#     acdl_new.attrs.update({
+#         'product_name': 'ACDL',
+#         'product_type': 'ACDL',
+#         'instrument': 'CALIPSO',
+#         'source_file': filename,
+#         'data_source': 'ACDL_converted_to_EarthCARE_format',
+#         'creation_date': str(datetime.now()),
+#         'converted_by': 'ACDL_to_EarthCARE_converter'
+#     })
+
+#     # Preserve original coordinates and attributes
+#     if acdl.coords:
+#         for coord_name, coord_data in acdl.coords.items():
+#             if coord_name not in acdl_new.coords:
+#                 acdl_new = acdl_new.assign_coords({coord_name: coord_data})
+
+#     # Preserve original global attributes (but don't overwrite our new ones)
+#     for attr_name, attr_value in acdl.attrs.items():
+#         if attr_name not in acdl_new.attrs:
+#             acdl_new.attrs[attr_name] = attr_value
+
+#     # Save the output file if requested
+#     if save_output:
+#         # Create output filename
+#         input_dir = os.path.dirname(data_path)
+#         input_filename = os.path.basename(data_path)
+#         name_without_ext = os.path.splitext(input_filename)[0]
+#         output_filename = f"{name_without_ext}_EC_like.h5"
+#         output_path = os.path.join(input_dir, output_filename)
+        
+#         # Save to NetCDF with all data under the 'ScienceData' group
+#         print(f"Saving converted data to: {output_path}")
+        
+#         # Set compression for all variables to save space
+#         encoding = {}
+#         for var_name in acdl_new.data_vars:
+#             encoding[var_name] = {'zlib': True, 'complevel': 6}
+        
+#         # Save the dataset under 'ScienceData' group
+#         acdl_new.to_netcdf(
+#             output_path, 
+#             mode='w',
+#             group='ScienceData',
+#             encoding=encoding,
+#             format='NETCDF4'
+#         )
+                
+#         print(f"Data saved under group: 'ScienceData'")
+#         print(f"File size: {os.path.getsize(output_path) / (1024**2):.2f} MB")
+
+#     return acdl_new
+
+
+
+import os
+from datetime import datetime
+
+import numpy as np
+import xarray as xr
+
+
+# ----------------------------------------------------------------------
+# Variables with a single, stable source name across product versions.
+#   source name -> (target name, units, long_name)
+# ----------------------------------------------------------------------
+STABLE_VARIABLES = {
+    '532_Extinction_coefficient': (
+        'particle_extinction_coefficient_355nm', 'm-1',
+        'Derived extinction at 532nm from the ACDL data'),
+    '532_Particle_Backscatter_coefficient': (
+        'particle_backscatter_coefficient_355nm', 'm-1 sr-1',
+        'Derived backscatter at 532nm from the ACDL data'),
+    '532_Lidar_ratio': (
+        'lidar_ratio_355nm', 'sr',
+        'Extinction to backscatter ratio at 532nm'),
+    'Scene Classification Flag': (
+        'simple_classification', '-', 'Simple Classification'),
+    'Particle Scattering Ratio': (
+        'particle_scattering_ratio', '-', 'Particle scattering ratio'),
+    'Height':      ('height',      'm', 'Height'),
+    'Latitude':    ('latitude',    'degree_north', 'Latitude'),
+    'Longitude':   ('longitude',   'degree_east',  'Longitude'),
+    'DEM_h':       ('elevation',   'm', 'Terrain elevation'),
+    'UTC_Time':    ('time',        None, 'Time'),
+    'dayornight':  ('day_night_flag', '-', 'Day (1) / night (0) flag'),
+    'Temperature': ('temperature', 'K',   'Temperature'),
+    'Pressure':    ('pressure',    'hPa', 'Pressure'),
+    'O3':          ('ozone_concentration', '-', 'Ozone concentration'),
+    'LR_QC':       ('lidar_ratio_quality_flag', '-', 'Lidar ratio quality flag'),
+}
+
+# ----------------------------------------------------------------------
+# Variables whose source name changed between product baselines.
+#   target name -> [(source name, units, long_name), ...] newest first
+#
+# WARNING: the members of a pair are not guaranteed to be the same
+# physical quantity. Volume and particle depolarization differ by the
+# molecular contribution; "tropospheric" and "tropopause" height may not
+# be identical. The name actually used is recorded in the
+# 'acdl_source_variable' attribute so baselines cannot be silently mixed.
+# ----------------------------------------------------------------------
+VERSIONED_VARIABLES = {
+    'particle_linear_depol_ratio_355nm': [
+        ('Particle Depolarization Ratio', '-',
+         'Particle linear depolarization ratio at 532nm'),
+        ('Depolarization_Ratio', '-',
+         'Volume linear depolarization ratio at 532nm'),
+    ],
+    'attenuated_backscatter_coefficient_355nm': [
+        ('Normalized Total Attenuated Backscatter', 'm-1 sr-1',
+         'Normalized total attenuated backscatter at 532nm'),
+        ('Attenuated backscatter coefficient 532nm', 'm-1 sr-1',
+         'Attenuated backscatter coefficient at 532nm'),
+    ],
+    'color_ratio': [
+        ('attenuation color ratio', '-', 'Attenuation color ratio'),
+        ('Color Ratio', '-', 'Color ratio'),
+    ],
+    'tropopause_height': [
+        ('Tropopause height', 'm', 'Tropopause height'),
+        ('Tropospheric height', 'm', 'Tropospheric height'),
+    ],
+}
+
+# 532 nm fields renamed to 355 nm EarthCARE names
+WAVELENGTH_DEPENDENT = {
+    'particle_extinction_coefficient_355nm',
+    'particle_backscatter_coefficient_355nm',
+    'lidar_ratio_355nm',
+    'particle_linear_depol_ratio_355nm',
+    'attenuated_backscatter_coefficient_355nm',
+}
+
+# Fields given zero-filled placeholders because EarthCARE functions
+# expect them. ACDL supplies no uncertainties.
+ERROR_FIELDS = (
+    'particle_extinction_coefficient_355nm',
+    'particle_backscatter_coefficient_355nm',
+    'lidar_ratio_355nm',
+    'particle_linear_depol_ratio_355nm',
+)
+
+# ----------------------------------------------------------------------
+# ACDL scene classification.
+# Colours match the A-EBD panel as drawn with colormaps.chiljet2 so the
+# ACDL and ATLID classification columns are directly comparable.
+# ecplot.plot_EC_target_classification parses 'definition' positionally
+# via int(c.split(':')[0]) and handles the non-contiguous values (no 9,
+# nothing below 4) through its BoundaryNorm midpoint logic, so the
+# string lists only the classes that exist, unpadded. The '\n\t'
+# separator matches the real A-EBD definition format.
+# ----------------------------------------------------------------------
+CLASSIFICATION_LABELS = {
+     4: 'Cloud',
+     5: 'Stratospheric layer',
+     6: 'Aerosol',
+     7: 'Surface',
+     8: 'Subsurface',
+    10: 'Totally attenuated',
+}
+
+CLASSIFICATION_COLORS = {
+     4: '#ffff00',   # yellow        <- aebd  2 (ice cloud proxy)
+     5: '#ff0000',   # red           <- aebd  4 (stratospheric cloud)
+     6: '#ffa500',   # orange        <- aebd  3 (aerosol)
+     7: '#4169e1',   # medium blue   <- aebd -2 (surface)
+     8: '#ce93d8',   # light purple  (no aebd counterpart)
+    10: '#4a4a4a',   # dark charcoal (no aebd counterpart)
+}
+
+MATLAB_EPOCH_OFFSET = 719529   # days from year 1 to 1970
+
+
+def _matlab_datenum_to_datetime64(datenum):
+    """Convert MATLAB datenum to datetime64[ns] via int64 rounding."""
+    days = np.asarray(datenum, dtype=np.float64) - MATLAB_EPOCH_OFFSET
+    return (days * 86400e9).round().astype('int64').astype('datetime64[ns]')
+
+
+def read_acdl_file(data_path, save_output=True, verbose=True):
+    """
+    Read an ACDL granule and return it with EarthCARE-like names.
+
+    Parameters
+    ----------
     data_path : str
-        Path to the input ACDL file
-    save_output : bool, default=True
-        Whether to save the converted dataset to a new NetCDF file
-    
-    Returns:
-    --------
+        Path to the raw ACDL HDF5 file.
+    save_output : bool, default True
+        Write '<name>_EC_like.h5' beside the input, under 'ScienceData'.
+    verbose : bool, default True
+        Report missing variables, fallback names and save progress.
+
+    Returns
+    -------
     xr.Dataset
-        Converted dataset with EarthCARE-like variable names
-    '''
-    import pandas as pd
-    import numpy as np
-    import xarray as xr
-    from datetime import datetime, timedelta
-    import os
+    """
+    def log(msg):
+        if verbose:
+            print(msg)
 
-    acdl_to_earthcare_mapping = {
-        '532_Extinction_coefficient': 'particle_extinction_coefficient_355nm',
-        '532_Lidar_ratio': 'lidar_ratio_355nm',
-        '532_Particle_Backscatter_coefficient': 'particle_backscatter_coefficient_355nm',
-        'Color Ratio': 'color_ratio',
-        'DEM_h': 'dem_height',
-        'Depolarization_Ratio': 'particle_linear_depol_ratio_355nm',
-        'Height': 'height',
-        'Latitude': 'latitude',
-        'Longitude': 'longitude',
-        'Particle Scattering Ratio': 'particle_scattering_ratio',
-        'Scene Classification Flag': 'scene_classification_flag',
-        'UTC_Time': 'time',
-        'dayornight': 'day_night_flag',
-        'Attenuated backscatter coefficient 532nm': 'attenuated_backscatter_coefficient_355nm',
-        'LR_QC': 'lidar_ratio_quality_flag',
-        'O3': 'ozone_concentration',
-        'Pressure': 'pressure',
-        'Temperature': 'temperature',
-        'Tropospheric height': 'tropospheric_height'
-    }
-
-    # Variables that need dimension transposition
-    variables_to_transpose = {
-        '532_Extinction_coefficient',
-        '532_Particle_Backscatter_coefficient', 
-        'Depolarization_Ratio',
-        'Color Ratio',
-        'Particle Scattering Ratio',
-        'Scene Classification Flag',
-        'Attenuated backscatter coefficient 532nm',
-        'LR_QC',
-        'O3',
-        'Pressure',
-        'Temperature'
-    }
-
-    # Dimension renaming mappings
-    basic_dim_mapping = {
-        'phony_dim_3': 'JSG_height',    
-        'phony_dim_4': 'along_track',   
-        'phony_dim_5': 'scalar_dim_1',  
-        'phony_dim_6': 'scalar_dim_2',  
-    }
-
-    auxiliary_dim_mapping = {
-        'phony_dim_0': 'along_track',   
-        'phony_dim_1': 'JSG_height',    
-        'phony_dim_2': 'scalar_dim_3'   
-    }
-
-    # Read and process groups
     basic = xr.open_dataset(data_path, group='Basic')
     auxiliary = xr.open_dataset(data_path, group='Auxiliary')
 
-    basic_renamed = basic.rename_dims(basic_dim_mapping)
-    auxiliary_renamed = auxiliary.rename_dims(auxiliary_dim_mapping)
-
-    # Drop singleton dimensions
-    basic_squeezed = basic_renamed.squeeze(drop=True)
-    auxiliary_squeezed = auxiliary_renamed.squeeze(drop=True)
-
-    # Merge groups
-    acdl = xr.merge([basic_squeezed, auxiliary_squeezed])
-
-    # Helper function to convert MATLAB datenum to datetime64
-    def matlab_datenum_to_datetime64(datenum_array):
-        """
-        Convert MATLAB datenum to numpy datetime64
-        """
-        matlab_epoch_offset = 719529  # Days from year 1 to year 1970
-        days_since_unix_epoch = datenum_array - matlab_epoch_offset
-        seconds_since_unix_epoch = days_since_unix_epoch * 24 * 3600
-        datetime_array = np.array(seconds_since_unix_epoch * 1e9, dtype='datetime64[ns]')
-        return datetime_array
-
-    # Collect and process variables
-    acdl_data = {}
-    for old_name, new_name in acdl_to_earthcare_mapping.items():
-        if old_name in acdl:
-            var = acdl[old_name]
-
-            # Special handling for time conversion
-            if old_name == 'UTC_Time':
-                # Convert MATLAB datenum to datetime64
-                time_values = matlab_datenum_to_datetime64(var.values)
-
-                acdl_data[new_name] = (
-                    var.dims,
-                    time_values,
-                    var.attrs
-                )
-                continue
-
-            # Transpose variables that need it
-            if old_name in variables_to_transpose and var.dims == ('JSG_height', 'along_track'):
-                var = var.transpose('along_track', 'JSG_height')
-
-            acdl_data[new_name] = (
-                var.dims,
-                var.values,
-                var.attrs
-            )
-
-    # Create new dataset
-    acdl_new = xr.Dataset(acdl_data)
-    # Define parameters that need error arrays
-    parameters_needing_errors = {
-        'particle_extinction_coefficient_355nm': 'particle_extinction_coefficient_355nm_error',
-        'particle_backscatter_coefficient_355nm': 'particle_backscatter_coefficient_355nm_error', 
-        'lidar_ratio_355nm': 'lidar_ratio_355nm_error',
-        'particle_linear_depol_ratio_355nm': 'particle_linear_depol_ratio_355nm_error'
-    }
-    
-    # Add error arrays for specified parameters
-    for param_name, error_name in parameters_needing_errors.items():
-        if param_name in acdl_new:
-            param_var = acdl_new[param_name]
-            
-            # Create error array with same shape and dimensions as the parameter
-            error_array = np.zeros_like(param_var.values, dtype=np.float32)
-            
-            # Create error variable with same dimensions and appropriate attributes
-            acdl_new[error_name] = (
-                param_var.dims,
-                error_array,
-                {
-                    'units': param_var.attrs.get('units', ''),
-                    'long_name': f"{param_var.attrs.get('long_name', param_name)} error",
-                    'description': f"Measurement error for {param_name}",
-                    '_FillValue': np.nan
-                }
-            )
-    
-    # Add geoid_offset variable with zero values along along_track dimension
-    if 'along_track' in acdl_new.dims:
-        along_track_size = acdl_new.dims['along_track']
-        acdl_new['geoid_offset'] = (
-            ('along_track',),
-            np.zeros(along_track_size, dtype=np.float32),
-            {'units': 'm', 'long_name': 'Geoid offset', 'description': 'Height offset from geoid to ellipsoid'}
+    n_height = basic['Height'].shape[0]
+    n_track = basic['Latitude'].shape[0]
+    if n_height == n_track:
+        raise ValueError(
+            f"height ({n_height}) equals along-track ({n_track}); array "
+            "orientation cannot be resolved by axis length"
         )
 
-    # Add along_track coordinate like EarthCARE
-    if 'time' in acdl_new:
-        along_track_size = acdl_new.dims['along_track']
-        acdl_new = acdl_new.assign_coords(
-            along_track=np.arange(along_track_size)
-        )
+    def rename_phony_dims(ds):
+        """
+        Map phony_dim_N -> JSG_height / along_track by axis length.
 
-    # ADD MISSING METADATA FOR PLOTTING COMPATIBILITY
-    # Extract filename from path for product code
-    filename = os.path.basename(data_path)
-    product_code = filename.split('.')[0]  # Remove file extension
+        The raw files have no named dimensions and h5netcdf numbers the
+        phony dims in discovery order, which changes between baselines
+        because the variable set changes. Singletons are left alone and
+        removed by squeeze(drop=True).
+        """
+        mapping = {d: ('JSG_height' if n == n_height else 'along_track')
+                   for d, n in ds.sizes.items()
+                   if str(d).startswith('phony_dim') and n in (n_height, n_track)}
+        return ds.rename_dims(mapping).squeeze(drop=True)
 
-    # Add encoding metadata that the plotting function expects
-    acdl_new.encoding['source'] = data_path
+    # PSC is deliberately not read: present in only some granules and
+    # carrying a third, feature-count dimension.
+    acdl = xr.merge([rename_phony_dims(basic), rename_phony_dims(auxiliary)])
 
-    # Add global attributes that might be expected
-    acdl_new.attrs.update({
+    def orient(var):
+        """Return a 2-D variable as (along_track, JSG_height)."""
+        if var.ndim == 2 and var.dims == ('JSG_height', 'along_track'):
+            return var.transpose('along_track', 'JSG_height')
+        return var
+
+    data = {}
+
+    # -- stable variables --------------------------------------------------
+    for source, (target, units, long_name) in STABLE_VARIABLES.items():
+        if source not in acdl:
+            log(f"  note: '{source}' not present")
+            continue
+
+        var = orient(acdl[source])
+        attrs = {'long_name': long_name, 'acdl_source_variable': source}
+        if units is not None:
+            attrs['units'] = units
+
+        values = (_matlab_datenum_to_datetime64(var.values)
+                  if source == 'UTC_Time' else var.values)
+        data[target] = (var.dims, values, attrs)
+
+    # -- version-dependent variables ---------------------------------------
+    for target, candidates in VERSIONED_VARIABLES.items():
+        match = next((c for c in candidates if c[0] in acdl), None)
+        if match is None:
+            log(f"  note: no source for '{target}' "
+                f"(tried: {', '.join(c[0] for c in candidates)})")
+            continue
+
+        source, units, long_name = match
+        primary = source == candidates[0][0]
+        if not primary:
+            log(f"  '{target}' <- '{source}' (fallback name)")
+
+        var = orient(acdl[source])
+        data[target] = (var.dims, var.values, {
+            'units': units,
+            'long_name': long_name,
+            'acdl_source_variable': source,
+            'acdl_source_is_primary': int(primary),
+        })
+
+    ds = xr.Dataset(data)
+
+    # -- true wavelength on renamed fields ---------------------------------
+    for name in WAVELENGTH_DEPENDENT & set(ds.data_vars):
+        ds[name].attrs.update({
+            'actual_wavelength_nm': 532,
+            'wavelength_note': ('named 355nm for EarthCARE function '
+                                'compatibility; measurement is at 532 nm'),
+        })
+
+    # -- classification attributes for ecplot ------------------------------
+    if 'simple_classification' in ds:
+        cls = ds['simple_classification']
+        keys = sorted(CLASSIFICATION_LABELS)
+
+        present = np.unique(cls.values[np.isfinite(cls.values)]).astype(int)
+        unmapped = [int(c) for c in present if c not in CLASSIFICATION_LABELS]
+        if unmapped:
+            print(f"  WARNING: classification codes {unmapped} present but "
+                  f"unmapped; colours will be wrong for this granule")
+
+        cls.attrs.update({
+            'definition': "\n\t".join(
+                f"{k}: {CLASSIFICATION_LABELS[k]}" for k in keys),
+            'flag_values': keys,
+            'flag_meanings': ' '.join(
+                CLASSIFICATION_LABELS[k].replace(' ', '_') for k in keys),
+            # joined: netCDF attributes cannot hold a list of strings
+            'category_colors': ','.join(CLASSIFICATION_COLORS[k] for k in keys),
+            'codes_present_in_granule': present.tolist(),
+            'definition_source': 'asserted by reader; not from ACDL product spec',
+        })
+
+    # -- placeholder error fields -------------------------------------------
+    for name in ERROR_FIELDS:
+        if name not in ds:
+            continue
+        var = ds[name]
+        ds[f'{name}_error'] = (
+            var.dims, np.zeros_like(var.values, dtype=np.float32), {
+                'units': var.attrs.get('units', ''),
+                'long_name': f"Estimated 1-sigma error in {var.attrs['long_name']}",
+                'description': ('PLACEHOLDER: ACDL provides no uncertainty '
+                                'estimate. Zero-filled for EarthCARE function '
+                                'compatibility. Not a retrieved uncertainty.'),
+                'is_placeholder': 1,
+            })
+
+    # -- fields EarthCARE functions expect ----------------------------------
+    if 'along_track' in ds.dims:
+        n = ds.sizes['along_track']
+        ds['geoid_offset'] = (('along_track',), np.zeros(n, dtype=np.float32), {
+            'units': 'm',
+            'long_name': 'Geoid_offset',
+            'description': 'PLACEHOLDER: zero-filled, not supplied by ACDL.',
+            'is_placeholder': 1,
+        })
+        ds = ds.assign_coords(along_track=np.arange(n))
+
+    # -- global metadata -----------------------------------------------------
+    ds.encoding['source'] = data_path
+    ds.attrs.update({
         'product_name': 'ACDL',
         'product_type': 'ACDL',
-        'instrument': 'CALIPSO',
-        'source_file': filename,
+        'instrument': 'ACDL',
+        'platform': 'DQ-1 (Daqi-1)',
+        'wavelength_nm': 532,
+        'wavelength_note': ('Variables carry _355nm suffixes for EarthCARE '
+                            'function compatibility. All ACDL measurements '
+                            'are at 532 nm.'),
+        'fill_value_note': ('Fill values passed through unmasked: -999 in the '
+                            'Basic group fields, NaN in LR_QC and Scene '
+                            'Classification Flag.'),
+        'source_file': os.path.basename(data_path),
         'data_source': 'ACDL_converted_to_EarthCARE_format',
         'creation_date': str(datetime.now()),
-        'converted_by': 'ACDL_to_EarthCARE_converter'
+        'converted_by': 'ACDL_to_EarthCARE_converter',
     })
 
-    # Preserve original coordinates and attributes
-    if acdl.coords:
-        for coord_name, coord_data in acdl.coords.items():
-            if coord_name not in acdl_new.coords:
-                acdl_new = acdl_new.assign_coords({coord_name: coord_data})
+    for key, value in acdl.attrs.items():
+        ds.attrs.setdefault(key, value)
 
-    # Preserve original global attributes (but don't overwrite our new ones)
-    for attr_name, attr_value in acdl.attrs.items():
-        if attr_name not in acdl_new.attrs:
-            acdl_new.attrs[attr_name] = attr_value
+    for name, coord in acdl.coords.items():
+        if name not in ds.coords:
+            ds = ds.assign_coords({name: coord})
 
-    # Save the output file if requested
+    # -- save ----------------------------------------------------------------
     if save_output:
-        # Create output filename
-        input_dir = os.path.dirname(data_path)
-        input_filename = os.path.basename(data_path)
-        name_without_ext = os.path.splitext(input_filename)[0]
-        output_filename = f"{name_without_ext}_EC_like.h5"
-        output_path = os.path.join(input_dir, output_filename)
-        
-        # Save to NetCDF with all data under the 'ScienceData' group
-        print(f"Saving converted data to: {output_path}")
-        
-        # Set compression for all variables to save space
-        encoding = {}
-        for var_name in acdl_new.data_vars:
-            encoding[var_name] = {'zlib': True, 'complevel': 6}
-        
-        # Save the dataset under 'ScienceData' group
-        acdl_new.to_netcdf(
-            output_path, 
-            mode='w',
-            group='ScienceData',
-            encoding=encoding,
-            format='NETCDF4'
-        )
-                
-        print(f"Data saved under group: 'ScienceData'")
-        print(f"File size: {os.path.getsize(output_path) / (1024**2):.2f} MB")
+        stem = os.path.splitext(os.path.basename(data_path))[0]
+        out_path = os.path.join(os.path.dirname(data_path), f"{stem}_EC_like.h5")
 
-    return acdl_new
+        log(f"Saving converted data to: {out_path}")
+        ds.to_netcdf(
+            out_path, mode='w', group='ScienceData', format='NETCDF4',
+            encoding={v: {'zlib': True, 'complevel': 6} for v in ds.data_vars},
+        )
+        log("Data saved under group: 'ScienceData'")
+        log(f"File size: {os.path.getsize(out_path) / (1024 ** 2):.2f} MB")
+
+    return ds

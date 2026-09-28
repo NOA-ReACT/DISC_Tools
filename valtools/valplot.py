@@ -19,7 +19,6 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 import numpy as np
 from scipy.signal import savgol_filter
 
-import pdb
 from val_L2_dictionaries import*
 
 # Set the Seaborn style and font
@@ -226,7 +225,8 @@ def plot_ANOM_profiles(ds, varname, hmax=15e3, ax=None, profile='EC',
 def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=None,
                       profile='EC',  heightvar='height', title=None, lin_scale=True,
                       log_scale=False, xlim=None, xlim_log=None, yticks=True, 
-                      xlabel=True, legend=False,  smoothing=False):
+                      xlabel=True, legend=False,  smoothing=False,
+                      hblank=0, ytick_step=None):
     
     """
    Plot EarthCARE profiles with error ranges. Dictionaries set up for: backscatter 
@@ -248,6 +248,12 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
    xlim : tuple           | (min, max) for linear x-axis
    xlim_log : tuple       | (min, max) for logarithmic x-axis
    yticks : bool          | Whether to show y-axis ticks (default: True)
+   hblank : float         | Blanking height in metres. Data below this height is not
+                            drawn, but the y-axis still spans 0 to hmax. Use this to
+                            hide an unreliable near-surface region without cropping
+                            the axis (default: 0, i.e. nothing blanked)
+   ytick_step : float     | Y-tick spacing in metres, anchored at 0. If None, chosen
+                            automatically from hmax (default: None)
    
    Returns
    -------
@@ -324,7 +330,22 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
         height = ds[heightvar][idx]
     else:
         height = ds[heightvar][::]
-        
+
+    # Blank the near-surface region: data below hblank is masked (NaN), so the
+    # line and the error band simply start at hblank.
+    # The y-axis limits are unaffected (still 0 to hmax) - this is deliberately
+    # different from cropping the view.
+    height = np.asarray(height)
+    var = np.asarray(var)
+    error = np.asarray(error)
+
+    if hblank > 0:
+        blank = height < hblank
+        if blank.all():
+            print(f'Warning: hblank={hblank} m blanks the entire profile')
+        var = np.where(blank, np.nan, var)
+        error = np.where(blank, np.nan, error)
+
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 12))
     else:
@@ -392,11 +413,27 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
         lines_log, labels_log = [], []
         
     ax.set_ylim([0, hmax])
-    ytick_positions = np.linspace(0, hmax, int(hmax/2e3 + 1))
+
+    # Ticks sit on an absolute grid anchored at 0, so panels plotted with
+    # different hmax still share round heights.
+    if ytick_step is None:
+        if hmax <= 4e3:
+            step = 500
+        elif hmax <= 10e3:
+            step = 1e3
+        elif hmax <= 25e3:
+            step = 2e3
+        else:
+            step = 5e3
+    else:
+        step = ytick_step
+
+    ytick_positions = np.arange(0, hmax + step, step)
+    ytick_positions = ytick_positions[ytick_positions <= hmax]
     ax.set_yticks(ytick_positions)
     
     if yticks:
-        ax.set_yticklabels([f'{int(pos/1000)}' for pos in ytick_positions],
+        ax.set_yticklabels([f'{pos/1000:g}' for pos in ytick_positions],
                           fontsize=12)
         ax.set_ylabel('Height a.s.l (km)', fontsize=16, labelpad=10)
     else:
@@ -410,6 +447,7 @@ def plot_AEBD_profiles(ds, varname, hmax=30e3, idx=None, ax=None, resolution=Non
     lines=lines_linear+lines_log
     labels=labels_line+labels_log
     ax.legend(lines, labels, loc='upper right', fontsize=14)
+
 
     if title:
         ax.set_title(f"{title}",fontsize=14, fontweight='bold')
@@ -490,10 +528,10 @@ def plot_AEBD_scatter(ds, varname, hmax=16e3, idx=None, ax=None, resolution=None
              loc='center left',
              bbox_to_anchor=(1.02, 0.8 if legend_number == 1 else 0.5),
              framealpha=0.5,
-             prop={'size': 8},
+             prop={'size': 10},
              title=legend_title,
              frameon=True,
-             title_fontproperties={'weight': 'bold', 'size': 9})
+             title_fontproperties={'weight': 'bold', 'size': 11})
              
     if title:
         ax.set_title(title, fontsize=14, fontweight='bold')
@@ -636,10 +674,10 @@ def plot_AEBD_cla_qs_manual(ds, cla_variable, hmax, title, idx, resolution,
              loc='center left',
              bbox_to_anchor=(1.02, 0.5),  # Same as legend_number=2 in original
              framealpha=0.5,
-             prop={'size': 8},
+             prop={'size': 10},
              title='Ground Classification',
              frameon=True,
-             title_fontproperties={'weight': 'bold', 'size': 9})
+             title_fontproperties={'weight': 'bold', 'size': 11})
     
     # Add back the classification legend if it existed
     if classification_legend:

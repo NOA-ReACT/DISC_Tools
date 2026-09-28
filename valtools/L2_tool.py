@@ -23,7 +23,8 @@ Version: 1.0.0
 
 import sys
 # optional, in case ectools and valtools are in different folders
-sys.path.append('/home/akaripis/earthcare')  
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root -> ectools_noa
 
 import matplotlib.pyplot as plt
 from valtool_manager import plot_EC_L2_comparison

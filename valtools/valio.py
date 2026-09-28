@@ -5,8 +5,8 @@ Data processing module for EarthCARE analysis tools.
 
 """
 import sys
-sys.path.append('/home/akaripis/earthcare/valtools/')
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root -> ectools_noa
 import glob
 from datetime import datetime
 import numpy as np
@@ -16,9 +16,8 @@ import geopy.distance
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 
-from ectools.ectools_bit import ecio
+from ectools_noa import ecio
 from local_reader import read_RV_meteor#, process_sula_profile
-import pdb
 
 def extract_date(filename, keyword, file_type):
     parts = filename.split('_')
@@ -476,10 +475,10 @@ def load_process_scc_L1(sccpath):
 
 
 def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50,
-                        second_trim=False, second_distance=None):
+                         second_trim=False, second_distance=None, data=True):
     """
     Loads and trims EarthCARE products to desired distance around ground station.
-    
+
     Parameters
     ----------
     filepath : str                      |Path to the EarthCARE product file
@@ -488,7 +487,11 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     max_distance : float, optional      | Maximum distance in km for first trim
     second_trim : bool, optional        | Enable second trimming of dataset
     second_distance : float, optional   | Distance for second trim
-        
+    data : bool or xr.Dataset, optional | True (default) -> load the product from
+                                          `filepath` and apply the geoid correction.
+                                          Pass an already-opened, already-geoid-
+                                          corrected Dataset to skip reading.
+
     Returns
     -------
     tuple
@@ -497,30 +500,37 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     valid_products = ['ANOM', 'AEBD', 'ATC', 'MRGR']
     if product not in valid_products:
         raise ValueError(f'Product must be one of {valid_products}')
-        
+
     if not isinstance(station_coordinates, (list, tuple)) or len(station_coordinates) != 2:
         raise ValueError('station_coordinates must be a list/tuple of [latitude, longitude]')
-        
+
     if second_trim and second_distance is None:
         raise ValueError('second_distance must be provided when second_trim is True')
-        
-    if product == 'ANOM':
-        data = ecio.load_ANOM(filepath)
-        data['sample_altitude'].values = data['sample_altitude'].values - data['geoid_offset'].values[:, np.newaxis]
-    elif product == 'AEBD':
-        data = ecio.load_AEBD(filepath)
-        data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
-    elif product == 'MRGR':
-        data = ecio.load_MRGR(filepath)
-    else:
-        data = ecio.load_ATC(filepath)
-        data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
 
-    product_name=(ecio.load_EC_product(filepath, group='HeaderData/VariableProductHeader/MainProductHeader', 
-                                trim=False))['productName'].item()
+    load_from_file = (data is True)
+
+    if not load_from_file:
+        if not isinstance(data, xr.Dataset):
+            raise TypeError('data must be True or an already-opened xarray.Dataset')
+        if filepath is None:
+            raise ValueError('filepath is still required to read the product baseline')
+    else:
+        if product == 'ANOM':
+            data = ecio.load_ANOM(filepath)
+            data['sample_altitude'].values = data['sample_altitude'].values - data['geoid_offset'].values[:, np.newaxis]
+        elif product == 'AEBD':
+            data = ecio.load_AEBD(filepath)
+            data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
+        elif product == 'MRGR':
+            data = ecio.load_MRGR(filepath)
+        else:
+            data = ecio.load_ATC(filepath)
+            data['height'].values = data['height'].values - data['geoid_offset'].values[:, np.newaxis]
+
+    product_name = (ecio.load_EC_product(filepath, group='HeaderData/VariableProductHeader/MainProductHeader',
+                                         trim=False))['productName'].item()
     baseline = (product_name.split('_')[1])[2:]
 
-    
     if product == 'MRGR':
         threshold = 1e36
         idx = data['latitude'].sizes['across_track'] // 2
@@ -539,14 +549,14 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
             station_coordinates,
             max_distance_km=max_distance
         )
-        
+
     cropped_data = data.isel(along_track=distance_idx_nearest[0])
-    
+
     if product == 'ATC':
         return data, cropped_data, baseline
     if product == 'MRGR':
         return data, cropped_data, baseline
-        
+
     time = cropped_data['time']
     shortest_time = time[s_dist_idx].values
         # Inside load_crop_EC_product
@@ -561,7 +571,7 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
         second_cropped_data = data.isel(along_track=distance_idx_nearest_2[0])
         return (data, cropped_data, shortest_time, baseline,
                 distance_idx_nearest, s_dist, s_dist_idx, second_cropped_data)
-                
+
     return (data, cropped_data, shortest_time, baseline,
             distance_idx_nearest, s_dist, s_dist_idx)
 

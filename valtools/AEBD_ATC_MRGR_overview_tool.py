@@ -10,8 +10,8 @@ including A-EBD, A-TC classification, M-RGR imagery, and orbit mapping.
 """
 
 import sys
-sys.path.append('/home/akaripis/earthcare')
-sys.path.append('/home/akaripis/earthcare/valtools')
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root -> ectools_noa
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -29,7 +29,7 @@ from datetime import datetime
 import xarray as xr
 
 # Import custom modules
-from ectools.ectools_bit import ecio, ecplot as ecplt, colormaps as clm
+from ectools_noa import ecio, ecplot as ecplt, colormaps as clm
 from valio import *
 from valplot import *
 
