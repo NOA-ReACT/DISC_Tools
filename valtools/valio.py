@@ -575,80 +575,122 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     return (data, cropped_data, shortest_time, baseline,
             distance_idx_nearest, s_dist, s_dist_idx)
 
-def read_pollynet_profile(file, data=False):
+def read_pollynet_profile(file, data=False, wavelengths=('355', '532', '1064')):
     """
-    Read PollyNET netCDF  profile file and return datasets with EarthCARE-aligned names.
-    
+    Read PollyNET netCDF profile file and return datasets with
+    EarthCARE-aligned names.
+
     Parameters
     ----------
-    file : str                        | Path to file or xarray Dataset
-    data : bool, optional             | Whether input is already a Dataset
-        
+    file : str or xarray.Dataset
+        Path to file or already opened Dataset.
+
+    data : bool, optional
+        Whether input is already a Dataset.
+
+    wavelengths : tuple of str
+        Wavelengths to map. Variables absent from the file
+        are skipped silently.
+
     Returns
     -------
-    tuple (ds_raman, ds_klett)       | Two datasets with aligned variable names
+    ds_raman, ds_klett : xarray.Dataset
+        Raman and Klett datasets using the common internal naming convention.
+        Singleton PollyNET-specific dimensions ('method', 'reference_height')
+        are removed.
     """
-    ds_orig = file if data else xr.open_dataset(file)
-    
-    raman_mapping = {
-        'aerBsc_raman_355': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_raman_355': 'particle_backscatter_coefficient_355nm_error',
-        'aerExt_raman_355': 'particle_extinction_coefficient_355nm',
-        'uncertainty_aerExt_raman_355': 'particle_extinction_coefficient_355nm_error',
-        'aerLR_raman_355': 'lidar_ratio_355nm',
-        'uncertainty_aerLR_raman_355': 'lidar_ratio_355nm_error',
-        'parDepol_raman_355': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_raman_355': 'particle_linear_depol_ratio_355nm_error',
-        'start_time':'start_time',
-        'end_time': 'end_time'
-    }
-    
-    klett_mapping = {
-        'aerBsc_klett_355': 'particle_backscatter_coefficient_355nm',
-        'uncertainty_aerBsc_klett_355': 'particle_backscatter_coefficient_355nm_error',
-        'parDepol_klett_355': 'particle_linear_depol_ratio_355nm',
-        'uncertainty_parDepol_klett_355': 'particle_linear_depol_ratio_355nm_error',
-        'start_time':'start_time',
-        'end_time': 'end_time'
-    }
 
-    raman_data = {}
-    for old_name, new_name in raman_mapping.items():
-        if old_name in ds_orig:
-            raman_data[new_name] = (
-                ds_orig[old_name].dims,
-                ds_orig[old_name].values,
-                ds_orig[old_name].attrs)
-    
-    ds_raman = xr.Dataset(
-        raman_data,
-        coords={
-            'method': ds_orig['method'],
-            'height': ds_orig['height'],
-            'reference_height': ds_orig['reference_height']}
-                        )
-    
-    klett_data = {}
-    for old_name, new_name in klett_mapping.items():
-        if old_name in ds_orig:
-            klett_data[new_name] = (
-                ds_orig[old_name].dims,
-                ds_orig[old_name].values,
-                ds_orig[old_name].attrs)
-    
-    ds_klett = xr.Dataset(
-        klett_data,
-        coords={
-            'method': ds_orig['method'],
-            'height': ds_orig['height'],
-            'reference_height': ds_orig['reference_height']}
-                    )
-    
-    for coord in ['method', 'height', 'reference_height']:
-        if coord in ds_orig.coords and hasattr(ds_orig[coord], 'attrs'):
-            ds_raman[coord].attrs = ds_orig[coord].attrs
-            ds_klett[coord].attrs = ds_orig[coord].attrs
-    
+    ds_orig = file if data else xr.open_dataset(file)
+
+    def _build_mapping(method):
+        """method is 'raman' or 'klett'."""
+
+        mapping = {
+            'start_time': 'start_time',
+            'end_time': 'end_time'
+        }
+
+        for w in wavelengths:
+
+            # Backscatter
+            mapping[f'aerBsc_{method}_{w}'] = \
+                f'particle_backscatter_coefficient_{w}nm'
+
+            mapping[f'uncertainty_aerBsc_{method}_{w}'] = \
+                f'particle_backscatter_coefficient_{w}nm_error'
+
+            # Particle depolarization
+            mapping[f'parDepol_{method}_{w}'] = \
+                f'particle_linear_depol_ratio_{w}nm'
+
+            mapping[f'uncertainty_parDepol_{method}_{w}'] = \
+                f'particle_linear_depol_ratio_{w}nm_error'
+            # Volume depolarization
+            mapping[f'volDepol_{method}_{w}'] = \
+                f'volume_linear_depol_ratio_{w}nm'
+            
+            mapping[f'uncertainty_volDepol_{method}_{w}'] = \
+                f'volume_linear_depol_ratio_{w}nm_error'
+
+            # Raman-only variables
+            if method == 'raman':
+
+                mapping[f'aerExt_{method}_{w}'] = \
+                    f'particle_extinction_coefficient_{w}nm'
+
+                mapping[f'uncertainty_aerExt_{method}_{w}'] = \
+                    f'particle_extinction_coefficient_{w}nm_error'
+
+                mapping[f'aerLR_{method}_{w}'] = \
+                    f'lidar_ratio_{w}nm'
+
+                mapping[f'uncertainty_aerLR_{method}_{w}'] = \
+                    f'lidar_ratio_{w}nm_error'
+
+        return mapping
+
+    raman_mapping = _build_mapping('raman')
+    klett_mapping = _build_mapping('klett')
+
+    coords = {
+        'height': ds_orig['height']
+    }
+    def _build_dataset(mapping):
+
+        var_data = {}
+
+        for old_name, new_name in mapping.items():
+
+            if old_name in ds_orig:
+
+                var_data[new_name] = (
+                    ds_orig[old_name].dims,
+                    ds_orig[old_name].values,
+                    ds_orig[old_name].attrs
+                )
+
+        return xr.Dataset(var_data, coords=coords)
+
+    ds_raman = _build_dataset(raman_mapping)
+    ds_klett = _build_dataset(klett_mapping)
+
+    if 'height' in ds_orig.coords:
+        ds_raman['height'].attrs = ds_orig['height'].attrs
+        ds_klett['height'].attrs = ds_orig['height'].attrs
+
+    # ---------------------------------------------------------
+    # Remove PollyNET storage dimensions that contain
+    # only one retrieval solution.
+    # ---------------------------------------------------------
+
+    for dim in ['method', 'reference_height']:
+
+        if ds_raman.sizes.get(dim) == 1:
+            ds_raman = ds_raman.squeeze(dim=dim, drop=True)
+
+        if ds_klett.sizes.get(dim) == 1:
+            ds_klett = ds_klett.squeeze(dim=dim, drop=True)
+
     return ds_raman, ds_klett
 
 def read_scc_profile(file, time_idx):
