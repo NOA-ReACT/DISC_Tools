@@ -13,8 +13,6 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import geopy.distance
-from scipy.ndimage import gaussian_filter1d
-from scipy.signal import savgol_filter
 
 from ectools_noa import ecio
 from local_reader import read_RV_meteor#, process_sula_profile
@@ -406,6 +404,70 @@ def process_multiple_files(folder_path, network, file_type=None, date=None):
     
     return combined_ds.sortby('time')
 
+def filter_dataset_by_values(ds, filter_var, filter_values, variables_to_filter=None,
+                              fill_value=None, product='EC', bad_percentage=1.0, hmax=None):
+    """
+    Mask dataset values where `filter_var` takes any of `filter_values`.
+
+    Two levels (EC products):
+      1. pixel   : bins with a bad value are set to fill_value
+      2. profile : whole profiles are set to fill_value if the fraction of bad
+                   bins exceeds bad_percentage (computed below hmax, if given)
+
+    Parameters
+    ----------
+    ds : xarray.Dataset                         | Input dataset
+    filter_var : str                            | Variable holding the filter criteria (e.g. 'quality_status')
+    filter_values : list/tuple/set or scalar    | Values to mask (e.g. [2, 3, 4])
+    variables_to_filter : list of str, optional | Variables to mask. None -> all data variables
+    fill_value : int, float or None             | Value for masked data. None -> NaN (use None before averaging)
+    product : str                               | 'EC' enables the profile-level mask (needs 'JSG_height')
+    bad_percentage : float                      | Profile removed if bad fraction > this (1.0 -> never)
+    hmax : float, optional                      | Only bins below hmax (m) count for the bad fraction
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset with the selected variables masked
+    """
+    if not isinstance(filter_values, (list, tuple, set)):
+        filter_values = [filter_values]
+
+    mask = ds[filter_var].isin(filter_values)
+    print(f"QS filter: {int(mask.sum())}/{mask.size} bins masked "
+          f"({float(mask.mean())*100:.1f}%)")
+
+    if product == 'EC' and bad_percentage < 1.0:
+        valid = ds[filter_var].notnull()
+        if hmax is not None:
+            below = ds['height'] <= hmax
+            valid, bad = valid & below, mask & below
+        else:
+            bad = mask
+        bad_fraction = bad.sum(dim='JSG_height') / valid.sum(dim='JSG_height').clip(min=1)
+        profile_mask = bad_fraction > bad_percentage          # (along_track,)
+        print(f"QS filter: {int(profile_mask.sum())}/{profile_mask.size} profiles removed "
+              f"with >{bad_percentage*100:.0f}% bad bins")
+        mask = mask | profile_mask                             # broadcast by dim name
+
+    exclude_vars = {'height', 'time', 'lat', 'lon', 'latitude', 'longitude',
+                    'simple_classification', filter_var}
+    if variables_to_filter is not None:
+        if isinstance(variables_to_filter, str):
+            variables_to_filter = [variables_to_filter]
+        vars_to_process = [v for v in variables_to_filter if v in ds.data_vars]
+    else:
+        vars_to_process = [v for v in ds.data_vars
+                           if v not in exclude_vars and v not in ds.coords]
+
+    out = ds.copy()
+    for var in vars_to_process:
+        # only mask variables that share the filter dimensions
+        if set(mask.dims) <= set(ds[var].dims):
+            out[var] = ds[var].where(~mask) if fill_value is None else ds[var].where(~mask, fill_value)
+    return out
+
+
 def get_nearby_points_within_distance(latitudes, longitudes, reference_coords, 
                                     max_distance_km):
     """
@@ -475,7 +537,8 @@ def load_process_scc_L1(sccpath):
 
 
 def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50,
-                         second_trim=False, second_distance=None, data=True):
+                         second_trim=False, second_distance=None, data=True,
+                         qs_var='quality_status', qs_filter=None, qs_bad_fraction=1.0, qs_hmax=None):
     """
     Loads and trims EarthCARE products to desired distance around ground station.
 
@@ -491,6 +554,15 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
                                           `filepath` and apply the geoid correction.
                                           Pass an already-opened, already-geoid-
                                           corrected Dataset to skip reading.
+    qs_var : str, optional              | Quality variable used for filtering: 'quality_status'
+                                          (default) or 'extended_data_quality_status'
+    qs_filter : list, optional          | qs_var values to mask in the cropped data
+                                          (e.g. [2, 3, 4]). None -> no filtering. Skipped for
+                                          products without qs_var (e.g. ANOM)
+    qs_bad_fraction : float, optional   | Remove whole profiles with more bad bins than this
+                                          fraction (1.0 -> never)
+    qs_hmax : float, optional           | Bad fraction counted only below this height (m);
+                                          the masking itself covers the whole profile
 
     Returns
     -------
@@ -557,6 +629,14 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
     if product == 'MRGR':
         return data, cropped_data, baseline
 
+    apply_qs = qs_filter is not None and qs_var in data
+    if qs_filter is not None and not apply_qs:
+        print(f"QS filter skipped: {product} has no '{qs_var}'")
+
+    if apply_qs:
+        cropped_data = filter_dataset_by_values(cropped_data, qs_var, qs_filter,
+                                                bad_percentage=qs_bad_fraction, hmax=qs_hmax)
+
     time = cropped_data['time']
     shortest_time = time[s_dist_idx].values
         # Inside load_crop_EC_product
@@ -569,6 +649,9 @@ def load_crop_EC_product(filepath, station_coordinates, product, max_distance=50
             max_distance_km=second_distance
         )
         second_cropped_data = data.isel(along_track=distance_idx_nearest_2[0])
+        if apply_qs:
+            second_cropped_data = filter_dataset_by_values(second_cropped_data, qs_var, qs_filter,
+                                                           bad_percentage=qs_bad_fraction, hmax=qs_hmax)
         return (data, cropped_data, shortest_time, baseline,
                 distance_idx_nearest, s_dist, s_dist_idx, second_cropped_data)
 
@@ -797,97 +880,6 @@ def read_scc_profile(file, time_idx):
     
     # Return the datasets
     return ds_raman, ds_klett
-def cut_gnd_noise(sat_ds, gnd_ds, variables, heightvar_EC='height', 
-                  heightvar_gnd='height', step=900, threshold=80):
-    """
-    Function to cut noisy ground data. For a range of every 50km checks the average 
-    between the datasets and if their difference is above a threshold, it fills with nan 
-    values the respective points.
-    
-    Parameters
-    ----------
-    sat_ds : xarray.Dataset
-        Satellite dataset containing the reference measurements
-    gnd_ds : xarray.Dataset
-        Ground dataset to be filtered
-    variables : str or list of str
-        Variable name(s) to process
-    heightvar_EC : str, optional
-        Name of height coordinate in satellite (EC) dataset. Default is 'height'
-    heightvar_gnd : str, optional
-        Name of height coordinate in ground dataset. Default is 'height'
-    step : int, optional
-        Step size in kilometers for comparison windows. Default is 50.
-    threshold : float, optional
-        Maximum allowed percentage difference between averages. Default is 200.
-        
-    Returns
-    -------
-    xarray.Dataset
-        Filtered ground dataset with noise replaced by NaN values
-    """
-    import numpy as np
-    import xarray as xr
-    
-    # Convert single variable to list
-    if isinstance(variables, str):
-        variables = [variables]
-    
-    # Create a copy of ground dataset to avoid modifying the original
-    filtered_gnd = gnd_ds.copy(deep=True)
-    
-    # Verify variables exist in both datasets
-    for var in variables:
-        if var not in sat_ds or var not in gnd_ds:
-            raise ValueError(f"Variable {var} not found in both datasets")
-    
-    # Get the height coordinates
-    heights_gnd = gnd_ds[heightvar_gnd].values
-    heights_EC = sat_ds[heightvar_EC].values
-    
-    # Calculate the window ranges using the overlapping height range
-    min_height = max(heights_gnd.min(), heights_EC.min())
-    max_height = min(heights_gnd.max(), heights_EC.max())
-    height_ranges = np.arange(min_height, max_height + step, step)
-    
-    # Process each specified variable
-    for var in variables:
-        # Iterate through each height range
-        for start_height in height_ranges[:-1]:
-            end_height = start_height + step
-            
-            try:
-                # Select data within the current height range
-                sat_mask = (sat_ds[heightvar_EC] >= start_height) & (sat_ds[heightvar_EC] < end_height)
-                gnd_mask = (gnd_ds[heightvar_gnd] >= start_height) & (gnd_ds[heightvar_gnd] < end_height)
-                
-                sat_slice = sat_ds[var].where(sat_mask)
-                gnd_slice = gnd_ds[var].where(gnd_mask)
-                
-                # Check if we have any valid data in this range
-                if sat_slice.count() == 0 or gnd_slice.count() == 0:
-                    continue
-                
-                # Calculate averages for the window
-                sat_avg = float(sat_slice.mean(skipna=True))
-                gnd_avg = float(gnd_slice.mean(skipna=True))
-                # Calculate percentage difference
-                if sat_avg != 0 and not np.isnan(sat_avg) and not np.isnan(gnd_avg):
-                    pct_diff = abs((gnd_avg - sat_avg) / sat_avg * 100)
-                    
-                    # If difference exceeds threshold, replace values with NaN
-                    if pct_diff > threshold:
-                        filtered_gnd[var] = filtered_gnd[var].where(
-                            ~((filtered_gnd[heightvar_gnd] >= start_height) & 
-                              (filtered_gnd[heightvar_gnd] < end_height)), 
-                            np.nan)
-            
-            except Exception as e:
-                print(f"Error processing {var} at height range {start_height}-{end_height}: {e}")
-                continue
-                    
-    return filtered_gnd
-
 def read_sula_file(data_path):
     """
     Reads sula file
@@ -1011,78 +1003,3 @@ def process_sula_profile(file, data=False):
         ds_klett['particle_linear_depol_ratio_355nm'].attrs['wavelength'] = '355nm (converted from 532nm)'
     
     return ds_raman, ds_klett
-
-def truncate_at_deviation(sat_ds, gnd_ds, variables, heightvar_EC='JSG_height', 
-                         heightvar_gnd='height', threshold=80, window_size=2):
-    """
-    Truncate ground profile when moving average of deviations exceeds threshold.
-    
-    Parameters
-    ----------
-    sat_ds, gnd_ds : xarray.Dataset
-        Satellite and ground datasets
-    variables : str or list of str
-        Variable name(s) to process
-    heightvar_EC, heightvar_gnd : str
-        Height coordinate names
-    threshold : float
-        Maximum allowed percentage difference. Default is 200.
-    window_size : int
-        Number of points to average for moving window. Default is 3.
-        
-    Returns
-    -------
-    xarray.Dataset
-        Ground dataset truncated at deviation point
-    """
-    import numpy as np
-    
-    if isinstance(variables, str):
-        variables = [variables]
-    
-    truncated_gnd = gnd_ds.copy(deep=True)
-    
-    for var in variables:
-        # Get height coordinates
-        gnd_heights = gnd_ds[heightvar_gnd].values
-        sat_heights = sat_ds[heightvar_EC].values
-        
-        # Calculate percentage differences for each height
-        pct_diffs = []
-        valid_heights = []
-        
-        for height in gnd_heights:
-            # Find closest satellite point
-            sat_idx = np.argmin(np.abs(sat_heights - height))
-            gnd_idx = np.argmin(np.abs(gnd_heights - height))
-            
-            sat_val = float(sat_ds[var].isel({heightvar_EC: sat_idx}))
-            gnd_val = float(gnd_ds[var].isel({heightvar_gnd: gnd_idx}))
-            
-            # Calculate percentage difference if both values are valid
-            if not (np.isnan(sat_val) or np.isnan(gnd_val)) and abs(sat_val) > 1e-10:
-                pct_diff = abs((gnd_val - sat_val) / sat_val * 100)
-                pct_diffs.append(pct_diff)
-                valid_heights.append(height)
-        
-        # Apply moving average to find cutoff point
-        cutoff_height = None
-        
-        if len(pct_diffs) >= window_size:
-            for i in range(window_size - 1, len(pct_diffs)):
-                # Calculate moving average of last window_size points
-                window_avg = np.mean(pct_diffs[i - window_size + 1:i + 1])
-                
-                if window_avg > threshold:
-                    cutoff_height = valid_heights[i - window_size + 1]  # Cut at start of bad window
-                    print(f"Variable {var}: Cutting at {cutoff_height:.1f}km (moving avg: {window_avg:.1f}%)")
-                    break
-        
-        # Truncate at cutoff height
-        if cutoff_height is not None:
-            truncated_gnd[var] = truncated_gnd[var].where(
-                truncated_gnd[heightvar_gnd] <= cutoff_height, np.nan)
-        else:
-            print(f"Variable {var}: No truncation needed (profile quality OK)")
-    
-    return truncated_gnd

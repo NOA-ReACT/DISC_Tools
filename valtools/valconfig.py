@@ -22,6 +22,12 @@ Modifies each of the following parameters according to the case of interest.
 - BASIC_SMOOTHING: Applies a low pass filter to the ground data to remove high
                     frequency data
 - RETRIEVAL: Either RAMAN, KLETT or both
+- QS_VAR: A-EBD quality variable used for filtering: 'quality_status' or
+          'extended_data_quality_status'
+- QS_FILTER: QS_VAR values masked before comparison. None -> no filtering
+             quality_status: [2, 3, 4] | extended_data_quality_status: [2, 102, 200]
+- QS_BAD_FRACTION: whole A-EBD profile removed if more than this fraction of its
+             bins (below HMAX[2]) is bad. 1.0 -> only pixel masking
   
     """
 
@@ -63,7 +69,10 @@ DEFAULT_CONFIG_L2 = {
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     'SMOOTHING': True,
     'COMP_TYPE': 'average', #οptions: average(50km), average_profiles(10profiles), profile
-    'RETRIEVAL': 'RAMAN' #All caps
+    'RETRIEVAL': 'RAMAN', #All caps
+    'QS_VAR': 'quality_status',  # or 'extended_data_quality_status'
+    'QS_FILTER': [2, 3, 4],           # e.g. [2, 3, 4] | extended: [2, 102, 200]
+    'QS_BAD_FRACTION': 1.0,
 }
 
 ##### - MAAP usage

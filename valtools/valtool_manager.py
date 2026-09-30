@@ -498,7 +498,6 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     else:
         idx = idx
     # Plot ground data if available
-    # gnd_profilesf = truncate_at_deviation(aebd_profiles, gnd_profiles, variables)
     for i, (variable, ax, title) in enumerate(zip(variables, axes, titles)):
         if variable in gnd_profiles:
             plot_AEBD_profiles(gnd_profiles, variable, ax=ax, lin_scale=lin_scale,
@@ -978,7 +977,11 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
         aebd, aebd_50km, shortest_time, aebd_baseline, distance_idx_nearest, \
             dst_min, s_dist_idx = load_crop_EC_product(
                 aebdpath, station_coordinates, product='AEBD',
-                max_distance=max_distance, second_trim=False)
+                max_distance=max_distance, second_trim=False,
+                qs_var=DEFAULT_CONFIG_L2['QS_VAR'],
+                qs_filter=DEFAULT_CONFIG_L2['QS_FILTER'],
+                qs_bad_fraction=DEFAULT_CONFIG_L2['QS_BAD_FRACTION'],
+                qs_hmax=hmax[2])
     except Exception as e:
         print("AEBD dataset not in range of the station.")
         raise
