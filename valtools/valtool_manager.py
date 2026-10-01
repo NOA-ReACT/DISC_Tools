@@ -359,7 +359,7 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     # mark the satellite overpass and the ground averaging window
     for ax in (ax6, ax7):
         ax.axvline(shortest_time, color='black', ls='--', lw=1.5, zorder=5)
-        if gnd_t0 is not None:
+        if gnd_t1 is not None:
             ax.axvspan(gnd_t0, gnd_t1, color='black', alpha=0.12, zorder=4)
             ax.axvline(gnd_t0, color='black', ls=':', lw=1.2, zorder=5)
             ax.axvline(gnd_t1, color='black', ls=':', lw=1.2, zorder=5)
