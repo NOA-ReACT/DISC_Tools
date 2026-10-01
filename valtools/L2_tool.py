@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -52,10 +51,11 @@ def main():
     scale: str                  | Scale of the profiles: linear or log
     """
     
-    # Input paths
+    # Input paths: set them in CUSTOM_PATHS_L2 (valconfig.py).
+    # If CUSTOM_PATHS_L2 is left empty, build_paths is used as a fallback; it
+    # expects one example folder structure under ROOT_DIR (see README).
     ROOT_DIR = DEFAULT_CONFIG_L2['ROOT_DIR']
 
-    # Use CUSTOM_PATHS_L2 if any value is set, otherwise build from ROOT_DIR
     if any(v is not None for v in CUSTOM_PATHS_L2.values()):
         PATHS = CUSTOM_PATHS_L2
     else:

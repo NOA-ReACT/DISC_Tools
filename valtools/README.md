@@ -72,7 +72,8 @@ Supports data from:
 ## Running the Tools
 
 1. **Configure Settings:**
-   - Set root directory - (`valconfig.py`)
+   - Set the input files in `CUSTOM_PATHS_L1` / `CUSTOM_PATHS_L2` (`valconfig.py`):
+     EarthCARE product paths (local or MAAP/S3), ground data folder, output folder
    - Adjust default configuration: - (`valconfig.py`)
      - Ground Network
      - Profile scale (log/linear)
@@ -80,7 +81,6 @@ Supports data from:
      - Axes limits
      - `HMAX` / `HMIN`: height range (`HMIN` blanks the L2 profiles below it)
      - `COMP_TYPE`: `average`, `average_profiles` or `profile` (see L2 Tool)
-     - `CUSTOM_PATHS_L1/L2`: explicit file paths (e.g. on MAAP) instead of `ROOT_DIR`
 
 2. **Execute:**
    ```python
@@ -90,7 +90,7 @@ Supports data from:
    Or from the directly from the console.
 
 ## Supporting Modules
-- `valconfig.py`: Configuration file (root_dir, plot adjustments)
+- `valconfig.py`: Configuration file (input paths, plot adjustments)
 - `valtool_manager.py`:  Main plotting functions for L1 and L2 tools
 - `valio.py`: Data processing functions
 - `valplot.py`: Plotting functions
@@ -102,7 +102,10 @@ Supports data from:
 Note: Plotting functions from `valplot.py` can be used independently for standalone 
 plotting tasks during Cal/Val activities.
 
-## Input Data Organization
+## Example folder structure (optional)
+Not required. If `CUSTOM_PATHS_L1/L2` are left empty, `build_paths` looks for
+the files under `ROOT_DIR` in the structure below.
+
 Root_directory/
 ├── L1/
 │   ├── eca/

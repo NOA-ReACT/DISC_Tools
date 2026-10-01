@@ -54,10 +54,11 @@ def main():
     log_scale (Bool):               | Whether to use logarithmic scale for 
                                         profile plots, default: False
     """
-    # Input paths
+    # Input paths: set them in CUSTOM_PATHS_L1 (valconfig.py).
+    # If CUSTOM_PATHS_L1 is left empty, build_paths is used as a fallback; it
+    # expects one example folder structure under ROOT_DIR (see README).
     ROOT_DIR = DEFAULT_CONFIG_L1['ROOT_DIR']
     
-    # Use CUSTOM_PATHS_L2 if any value is set, otherwise build from ROOT_DIR
     if any(v is not None for v in CUSTOM_PATHS_L1.values()):
         PATHS = CUSTOM_PATHS_L1
     else:

@@ -60,6 +60,10 @@ def filter_files_by_baseline(file_list, baseline):
 def build_paths(root_dir, network, level, baseline=None):
     """
     Build paths dictionary from root directory and create directories if they don't exist
+
+    Optional convenience for one example folder structure (see README,
+    'Example folder structure'). Not required: the normal way is to give the
+    file paths directly in CUSTOM_PATHS_L1 / CUSTOM_PATHS_L2 (valconfig.py).
     
     Parameters
     ----------
@@ -776,6 +780,21 @@ def read_pollynet_profile(file, data=False, wavelengths=('355', '532', '1064')):
 
     return ds_raman, ds_klett
 
+def _add_time_window(ds, old):
+    """Copy the measurement window of an SCC profile into start_time / end_time.
+
+    Uses time_bounds (start, end) when present; otherwise start_time = time
+    and no end_time.
+    """
+    if 'time_bounds' in old:
+        bounds = old['time_bounds'].values.ravel()
+        ds['start_time'] = ((), bounds[0])
+        ds['end_time'] = ((), bounds[-1])
+    else:
+        ds['start_time'] = ((), old['time'].values)
+    return ds
+
+
 def read_scc_profile(file, time_idx):
     """
     Read PollyNET netCDF profile file and return datasets with EarthCARE-aligned names.
@@ -849,6 +868,7 @@ def read_scc_profile(file, time_idx):
             for coord in ['method', 'height', 'reference_height']:
                 if coord in old_klett.coords and hasattr(old_klett[coord], 'attrs'):
                     ds_klett[coord].attrs = old_klett[coord].attrs
+            ds_klett = _add_time_window(ds_klett, old_klett)
     
     # Process Raman data 
     if old_raman is not None:            
@@ -872,6 +892,7 @@ def read_scc_profile(file, time_idx):
         for coord in ['method', 'height', 'reference_height']:
             if coord in old_raman.coords and hasattr(old_raman[coord], 'attrs'):
                 ds_raman[coord].attrs = old_raman[coord].attrs
+        ds_raman = _add_time_window(ds_raman, old_raman)
                 
         # Add the depolarization data to ds_raman if we have it and no ds_klett
         if ds_klett is None and pardepol is not None and pardepol_er is not None:

@@ -1386,7 +1386,7 @@ def format_time_ticks(ax, ds, timevar, lonvar, dim_name,
         )
     
     # Extract frame ID (common to all modes)
-    frame = ds.encoding['source'].split("/")[-1].split(".")[0].split("_")[-1]
+    frame = ds.encoding.get('source', '').split("/")[-1].split(".")[0].split("_")[-1]
     
     # Determine formatting parameters and calculate ticks based on mode
     if mode in ['comparison', 'scc']:

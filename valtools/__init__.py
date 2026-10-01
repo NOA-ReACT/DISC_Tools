@@ -13,7 +13,7 @@ Usage
 
 Authors: Andreas Karipis, Maria Tsichla, Peristera Paschou, Eleni Marinou, Ping Wang
 Contact: a.karipis@noa.gr, elmarinou@noa.gr
-Version: 2.0.0
+Version: 2.1.0
 """
 
 from .valtool_manager import plot_EC_L1_comparison, plot_EC_L2_comparison
@@ -28,6 +28,6 @@ __all__ = [
     'plot_ANOM_profiles'
 ]
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 __author__  = 'Andreas Karipis','Eleni Marinou'
 __contact__ = 'a.karipis@noa.gr','elmarinou@noa.gr'

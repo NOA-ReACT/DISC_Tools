@@ -3,7 +3,9 @@
 """
 File containing the configurations for the L1_tool.py & L2_tool.py. 
 
-User defines the ROOT_DIR to the data directory as desrcibed in the README file. 
+Input files are set in CUSTOM_PATHS_L1 / CUSTOM_PATHS_L2 (bottom of this file).
+ROOT_DIR is only used if those are left empty: build_paths then looks for one
+example folder structure under it (see README).
 Modifies each of the following parameters according to the case of interest. 
 
 - MAX_DISTANCE: the distance to which the EC data will be cropped around the station. 
@@ -55,7 +57,7 @@ DEFAULT_CONFIG_L2 = {
     'HMAX': [10e3,10e3,10e3],
     'HMIN': 0,
     'FIG_SCALE': 'linear',
-    'NETWORK': 'POLLYXT',#EARLINET, #THELISYS
+    'NETWORK': 'EARLINET',#EARLINET, #THELISYS
     'FIGSIZE': (35, 20),
     'VARIABLES': [
         'particle_backscatter_coefficient_355nm',
@@ -68,14 +70,15 @@ DEFAULT_CONFIG_L2 = {
     'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-2, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     # 'DEFAULT_XLIMS_LOG': [(5e-2, 5e1), (5e-1, 5e2), (1e1, 2e2), (1e-2, 1e0)],
     'SMOOTHING': True,
-    'COMP_TYPE': 'average', #οptions: average(50km), average_profiles(10profiles), profile
+    'COMP_TYPE': 'average_profiles', #οptions: average(50km), average_profiles(10profiles), profile
     'RETRIEVAL': 'RAMAN', #All caps
     'QS_VAR': 'quality_status',  # or 'extended_data_quality_status'
-    'QS_FILTER': [2, 3, 4],           # e.g. [2, 3, 4] | extended: [2, 102, 200]
+    'QS_FILTER': [2, 3, 4] ,           # e.g. [2, 3, 4] | extended: [2, 102, 200]
     'QS_BAD_FRACTION': 1.0,
 }
 
-##### - MAAP usage
+##### - Input paths (local files or MAAP/S3 urls)
+# Fill these in. If all are None, the tools fall back to build_paths(ROOT_DIR).
 
 CUSTOM_PATHS_L2 = {
     'AEBD':   None,  # e.g. h5_url from MAAP

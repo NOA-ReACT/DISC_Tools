@@ -21,6 +21,7 @@ import cartopy.crs as ccrs
 # from ectools.ectools_bit import ecio, ecplot as ecplt, colormaps as clm
 from ectools_noa import ecio, ecplot_standalone_v2 as ecplt, colormaps as clm
 from valconfig import DEFAULT_CONFIG_L1, DEFAULT_CONFIG_L2
+from val_networks import get_network, get_quicklook, get_gnd_times
 from valio import*
 from valplot import*
 
@@ -92,10 +93,8 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     #overpass_date = '2023-09-24 14:10:20' #mock value for dummy  files.
 
-    if network == 'POLLYXT' or network == 'EARLINET':
-        overpass_date_g = pd.Timestamp(shortest_time.item())#.strftime('%d-%m-%Y %H:%M')
-        #overpass_date = '2024-16-10 12:40:52' #mock value for dummy  files.
-
+    if get_network(network)['crop_quicklook']:
+        overpass_date_g = pd.Timestamp(shortest_time.item())
         gnd_quicklook = crop_polly_file(gnd_quicklook, overpass_date_g)
         
     print('File Loading successful')
@@ -150,32 +149,13 @@ def plot_EC_L1_comparison(anompath, simpath, gndfolderpath,  dstdir, network,
         adjust_subplot_position(ax, **params)
 
     
-    if network in ('EARLINET', 'THELISYS'):
-        variables_q  = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
-        titles_q     = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
-        plot_scales  = ['log', 'linear']                      # first log, second linear
-        plot_ranges  = [[1e7, 1e9], [0.0, 0.2]]            # numeric limits
-        heightvar    = 'altitude'
-        units        = ['m⁻¹ sr⁻¹', '-']
-    
-    elif network == 'POLLYXT':
-        variables_q  = ['attenuated_backscatter_355nm', 'volume_depolarization_ratio_355nm']
-        titles_q     = [f'{station_name} att.bsc', f'{station_name} vol.depol.ratio']
-        plot_scales  = ['log', 'linear']
-        plot_ranges  = [[1e-8, 3e-5], [0.0, 0.3]]
-        heightvar    = 'height'
-        units        = ['m⁻¹ sr⁻¹', '-']
-    
-    elif network == 'LICHT':
-        variables_q  = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
-        titles_q     = [f'{station_name} part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
-        plot_scales  = ['log', 'linear']
-        plot_ranges  = [[1e-7, 5e-5], [0.005, 0.8]]
-        heightvar    = 'height'
-        units        = ['m⁻¹ sr⁻¹', '-']
-    
-    else:
-        raise ValueError(f"Unsupported network: {network}. Must be one of 'EARLINET', 'THELISYS', 'POLLYXT', 'LICHT'.")
+    ql = get_quicklook(network, 'L1')
+    variables_q = ql['variables']
+    titles_q    = [f'{station_name} {t}' for t in ql['titles']]
+    plot_scales = ql['scales']
+    plot_ranges = ql['ranges']
+    heightvar   = ql['heightvar']
+    units       = ql['units']
 
     axs = [ax4, ax5]
     #pdb.set_trace()
@@ -278,49 +258,14 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
         
     time = (aebd_50km['time'])[idx]
     overpass_time = pd.Timestamp(time.item()).strftime('%d-%m-%Y %H:%M:%S.%f')[:-7]
-    gnd_t0 = gnd_t1 = None
+    cfg = get_network(network)
 
-    if network == 'LICHT':
-        gnd_overpass_time = pd.Timestamp(gnd_profiles['time'].values.item()).strftime('%d-%m-%Y %H:%M:%S.%f')[:-4]
-        gnd_overpass_time_fname = pd.Timestamp(gnd_profiles['time'].values.item()).strftime('%H_%M_%S')
-        
-    elif network == 'POLLYXT':
-                # Extract start time
-        start_timestamp = pd.to_datetime(gnd_profiles['start_time'].values.item(), unit='s')
-        start_date = start_timestamp.strftime('%d-%m-%Y')
-        start_hour = start_timestamp.strftime('%H:%M')
-        
-        # Extract end time
-        end_timestamp = pd.to_datetime(gnd_profiles['end_time'].values.item(), unit='s')
-        end_hour = end_timestamp.strftime('%H:%M')
-        
-        # Create the final combined format: DD_MM_YYYY HHMM_HHMM
-        gnd_overpass_time = f"{start_date} {start_hour}-{end_hour}"
-        gnd_ov_time_fname = start_timestamp.strftime('%H_%M')
-    elif network == 'THELISYS':
-        start_timestamp = pd.to_datetime(gnd_profiles['START_TIME'].values.item())
-        start_date = start_timestamp.strftime('%d_%m_%Y')
-        start_hour = start_timestamp.strftime('%H%M')
-    
-        # Extract end time - same approach
-        end_timestamp = pd.to_datetime(gnd_profiles['END_TIME'].values.item())
-        end_hour = end_timestamp.strftime('%H%M')
-    
-        # Create the final combined format: DD_MM_YYYY HHMM_HHMM
-        gnd_overpass_time = f"{start_date} {start_hour}_{end_hour}"
-        gnd_ov_time_fname =  start_timestamp.strftime('%H_%M')
-
-    else:
-            # Convert to a pandas Timestamp
-        gnd_time = pd.to_datetime(gnd_profiles['time'].values.item(), unit='ns', origin='unix')
-        
-        # Format as needed
-        gnd_overpass_time = gnd_time.strftime('%d_%m_%Y %H%M')
-        gnd_ov_time_fname = gnd_time.strftime('%H_%M')
-
-    # ground averaging window (shaded in the GND quicklooks)
-    if network in ('POLLYXT', 'THELISYS'):
-        gnd_t0, gnd_t1 = start_timestamp, end_timestamp
+    # ground time: start (and end, if the profile is an average over a window)
+    gnd_t0, gnd_t1 = get_gnd_times(gnd_profiles, cfg['time'])
+    gnd_overpass_time = gnd_t0.strftime('%d-%m-%Y %H:%M')
+    if gnd_t1 is not None:
+        gnd_overpass_time += f"-{gnd_t1.strftime('%H:%M')}"
+    gnd_ov_time_fname = gnd_t0.strftime('%H_%M')
 
     # Initialize figure
     fig = plt.figure(figsize=figsize)
@@ -328,22 +273,12 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
                  1.2], height_ratios=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], hspace=1.8,
                  wspace=0.6, top=0.85)
     
-    if network == 'POLLYXT' or network == 'EARLINET':
-        # Add main title
-        fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison at {overpass_time} UTC with\n'
-                      f' {station_name} Ground Station L2 {keyword} Retrieval at {gnd_overpass_time} UTC',
-                      fontsize=26, weight='bold', va='top', y=.96)
-
-
-    else:
-        lidar_name = 'MPI LICHT' # PollyXT # THELISYS
-
-        # fig.suptitle(f'EarthCARE A-EBD({baseline[0]}) & A-TC({baseline[1]}) Comparison with '
-        #              f' {station_name} Ground Station - {lidar_name} L2 Retrieval \n'
-        #              f'ECA: {overpass_time} UTC - '
-        #              f'{lidar_name}: {gnd_overpass_time} UTC\n',
-        #              fontsize=26, weight='bold', va='top', y=.96)
-
+    if cfg['suptitle']:
+        fig.suptitle(cfg['suptitle'].format(b0=baseline[0], b1=baseline[1],
+                                            overpass_time=overpass_time,
+                                            station_name=station_name, keyword=keyword,
+                                            gnd_time=gnd_overpass_time),
+                     fontsize=26, weight='bold', va='top', y=.96)
 
     # Create and adjust quicklook axes
     ax1 = fig.add_subplot(gs[0:2, 0:3])
@@ -402,32 +337,13 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     # pick a tiny positive floor for log axes
 
     
-    if network in ('EARLINET', 'THELISYS'):
-        variables_q  = ['range_corrected_signal', 'volume_linear_depolarization_ratio']
-        titles_q     = [f'{station_name} range.cor.signal', f'{station_name} vol.depol.ratio']
-        plot_scales  = ['log', 'linear']                      # first log, second linear
-        plot_ranges  = [[1e7, 1e9], [0.0, 0.4]]            # numeric limits
-        heightvar    = 'altitude'
-        units        = ['m⁻¹ sr⁻¹', '-']
-    
-    elif network == 'POLLYXT':
-        variables_q = ['quasi_bsc_532', 'quasi_pardepol_532']
-        titles_q = [f'{station_name} att.bsc', f'{station_name} par.depol.ratio']
-        plot_scales  = ['log', 'linear']                      # first log, second linear
-        plot_ranges = [[1e-8, 15e-6], [0, 0.4]]
-        heightvar = 'height'
-        units = ['m⁻¹ sr⁻¹','-']
-    
-    # elif network == 'LICHT':
-    #     variables_q  = ['particle_backscatter_coefficient_355nm', 'volume_linear_depol_ratio_532nm']
-    #     titles_q     = [f'{station_name} part. bsc coeff. 355 nm', f'{station_name} vol.depol.ratio 532 nm']
-    #     plot_scales  = ['log', 'linear']
-    #     plot_ranges  = [[1e-7, 5e-5], [0.005, 0.8]]
-    #     heightvar    = 'height'
-    #     units        = ['m⁻¹ sr⁻¹', '-']
-    
-    else:
-        raise ValueError(f"Unsupported network: {network}. Must be one of 'EARLINET', 'THELISYS', 'POLLYXT', 'LICHT'.")
+    ql = get_quicklook(network, 'L2')
+    variables_q = ql['variables']
+    titles_q    = [f'{station_name} {t}' for t in ql['titles']]
+    plot_scales = ql['scales']
+    plot_ranges = ql['ranges']
+    heightvar   = ql['heightvar']
+    units       = ql['units']
 
     axs = [ax6, ax7]
 
@@ -541,23 +457,10 @@ def plot_sub_L2(idx, resolution, gnd_quicklooks, station_name, station_coordinat
     
     # Save figure if destination directory provided
     # Change time format to avoid saving errors.
-    overpass_time_s = pd.Timestamp(time.item()).strftime('%d_%m_%Y_%H_%M_%S.%f')[:-7]
     
-    if comp_type == 'average':
-        if network == 'LICHT':
-            dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
-        else:
-            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_avg_{baseline[0]}.png'
-    elif comp_type =='average_profiles':
-        if network == 'LICHT':
-            dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
-        else:
-            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_avg_prof_{baseline[0]}.png'
-    else:
-        if network == 'LICHT':
-            dstfile = f'{overpass_time_s}_gnd{gnd_overpass_time_fname}_L2_intercomparison_{keyword}.png'
-        else:
-            dstfile = f'{network}_{keyword}{gnd_ov_time_fname}_{resolution}_{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_{idxx}_{baseline[0]}.png'
+    tag = {'average': 'avg', 'average_profiles': 'avg_prof'}.get(comp_type, idxx)
+    dstfile = (f"{network}_{keyword}{gnd_ov_time_fname}_{resolution}_"
+               f"{DEFAULT_CONFIG_L2['MAX_DISTANCE']}_{tag}_{baseline[0]}.png")
        
     # figure legend for the quicklook markers
     handles = [Line2D([], [], color='black', ls='--', lw=1.5,
@@ -966,9 +869,10 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
     """
     print('Start file loading')
     # Load and process GND data
+    cfg = get_network(network)
     gnd_quicklook, gnd_profile, station_name, \
         station_coordinates = load_ground_data(network, gndfolderpath, 'L2',
-                                                scc_term= 'b0355')
+                                                scc_term=cfg.get('scc_term', 'b0355'))
     
     print('Successfully loaded ground data')
     ###Load and process EarthCARE products####
@@ -998,9 +902,8 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
     
     overpass_date = pd.Timestamp(shortest_time.item()).strftime('%d-%m-%Y %H:%M')
     
-    if network == 'POLLYXT' or network == 'EARLINET':
-        overpass_date = pd.Timestamp(shortest_time.item())#.strftime('%d-%m-%Y %H:%M')
-        #overpass_date = '2024-16-10 12:40:52' #mock value for dummy  files.
+    if cfg['crop_quicklook']:
+        overpass_date = pd.Timestamp(shortest_time.item())
         if gnd_quicklook is not None:
             gnd_quicklook = crop_polly_file(gnd_quicklook, overpass_date)
         
@@ -1035,62 +938,28 @@ def plot_EC_L2_comparison(aebdpath, atcpath, gndfolderpath, dstdir, resolution,
     for idx in idxx_range:
         if comp_type == 'profile':
             aebd_profile = aebd_50km.isel(along_track=idx)
-        if network == 'EARLINET':
-            # For EARLINET, gnd_profile is a list of datasets
-            # Assuming gnd_profile[0] is raman and gnd_profile[1] is klett
-            for time_idx in range(gnd_profile[0].dims['time']):  # Using first dataset for time dimension
-                scc_raman, scc_klett = read_scc_profile(gnd_profile,time_idx)
-                gnd_datasets = []
-                keywords = []  
-                if scc_raman is not None: 
-                        gnd_datasets.append(scc_raman)
-                        keywords.append('Raman')
-                if scc_klett is not None:
-                        gnd_datasets.append(scc_klett)   
-                        keywords.append('Klett')
-                for i, (gnd_data, keyword) in enumerate(zip(gnd_datasets, keywords)):
-                    plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
-                                station_coordinates, aebd, aebd_50km,
-                                shortest_time, baseline, distance_idx_nearest,
-                                dst_min, aebd_profile, atc, atc_100km,
-                                (gnd_data), dstdir, hmax, fig_scale, 
-                                network, keyword, idx_range=idx_range, hmin=hmin, figsize=figsize, smoothing=smoothing,
-                                comp_type=comp_type)
-        else:
-         for time_idx in range(gnd_profile.dims['time']):    
-            
-            if network == 'LICHT':
-                gnd_data = gnd_profile.isel(time=time_idx)
-                plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
-                           station_coordinates, aebd, aebd_50km,
-                           shortest_time, baseline, distance_idx_nearest,
-                           dst_min, aebd_profile, atc, atc_100km,
-                           gnd_data, dstdir, hmax, fig_scale, 
-                           network, idx_range=idx_range, hmin=hmin, figsize=figsize, smoothing=smoothing,
-                           comp_type=comp_type)
-            else:
-                if network == 'POLLYXT':
-                    polly_raman, polly_klett = read_pollynet_profile(gnd_profile.isel(time=time_idx), 
-                                                                     data=True)
-                elif network == 'THELISYS':
-                    polly_raman, polly_klett = process_sula_profile(gnd_profile.isel(time=time_idx), 
-                                                                    data=True)
-                    
-                gnd_datasets = []
-                keywords = []  
-                if raman: 
-                        gnd_datasets.append(polly_raman)
-                        keywords.append('Raman')
-                if klett:
-                        gnd_datasets.append(polly_klett)   
-                        keywords.append('Klett')
+        for gnd_raman, gnd_klett in cfg['profiles'](gnd_profile):
 
-                for i, (gnd_data, keyword) in enumerate(zip(gnd_datasets, keywords)):
-                    
-                    plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
-                           station_coordinates, aebd, aebd_50km,
-                           shortest_time, baseline, distance_idx_nearest,
-                           dst_min, aebd_profile, atc, atc_100km,
-                           gnd_data, dstdir, hmax, fig_scale, 
-                           network, keyword, idx_range=idx_range, hmin=hmin, figsize=figsize, smoothing=smoothing,
-                           comp_type=comp_type)
+            # networks with use_retrieval=False (EARLINET) plot whatever exists
+            plot_raman = raman or not cfg['use_retrieval']
+            plot_klett = klett or not cfg['use_retrieval']
+
+            if gnd_raman is not None and plot_raman:
+                plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
+                            station_coordinates, aebd, aebd_50km,
+                            shortest_time, baseline, distance_idx_nearest,
+                            dst_min, aebd_profile, atc, atc_100km,
+                            gnd_raman, dstdir, hmax, fig_scale,
+                            network, 'Raman', idx_range=idx_range, hmin=hmin,
+                            figsize=figsize, smoothing=smoothing,
+                            comp_type=comp_type)
+
+            if gnd_klett is not None and plot_klett:
+                plot_sub_L2(idx, resolution, gnd_quicklook, station_name,
+                            station_coordinates, aebd, aebd_50km,
+                            shortest_time, baseline, distance_idx_nearest,
+                            dst_min, aebd_profile, atc, atc_100km,
+                            gnd_klett, dstdir, hmax, fig_scale,
+                            network, 'Klett', idx_range=idx_range, hmin=hmin,
+                            figsize=figsize, smoothing=smoothing,
+                            comp_type=comp_type)
